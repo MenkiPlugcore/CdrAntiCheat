@@ -14,7 +14,7 @@ softdepend:
 commands:
   cdrac:
     description: CdrAntiCheat administration command.
-    usage: /cdrac <status|reload|alerts|violations|inspect|evidence|packet>
+    usage: /cdrac <status|reload|alerts|testdiscord|violations|inspect|evidence|packet>
     aliases: [cdranticheat, anticheat]
     permission: cdranticheat.admin
 
