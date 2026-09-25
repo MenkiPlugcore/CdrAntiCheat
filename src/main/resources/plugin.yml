@@ -3,9 +3,10 @@ version: '${project.version}'
 main: store.cadera.cdranticheat.CdrAntiCheat
 api-version: '1.21'
 author: CADERA
-description: Modular anti-cheat for Paper servers by CADERA.
+description: Modular packet-aware anti-cheat for Paper servers by CADERA.
 website: https://cadera.site
 softdepend:
+  - packetevents
   - DiscordSRV
   - floodgate
   - Geyser-Spigot
@@ -13,7 +14,7 @@ softdepend:
 commands:
   cdrac:
     description: CdrAntiCheat administration command.
-    usage: /cdrac <status|reload|alerts|violations>
+    usage: /cdrac <status|reload|alerts|violations|packet>
     aliases: [cdranticheat, anticheat]
     permission: cdranticheat.admin
 
