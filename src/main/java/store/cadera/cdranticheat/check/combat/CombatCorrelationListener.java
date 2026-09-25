@@ -217,22 +217,27 @@ public final class CombatCorrelationListener implements Listener {
     private boolean evaluateFastSwitch(PacketSnapshot packet) {
         long maxSwitchInterval = Math.max(20L,
                 plugin.getConfig().getLong("combat-engine.killaura.max-switch-interval-ms", 90L));
+        long maxSwitchAge = Math.max(maxSwitchInterval,
+                plugin.getConfig().getLong("combat-engine.killaura.max-switch-age-ms", 140L));
         double minRotation = Math.max(10.0,
                 plugin.getConfig().getDouble("combat-engine.killaura.min-switch-rotation-degrees", 35.0));
 
         return packet.targetSwitchIntervalMillis() >= 0L
                 && packet.targetSwitchIntervalMillis() <= maxSwitchInterval
+                && packet.lastTargetSwitchAgoMillis() >= 0L
+                && packet.lastTargetSwitchAgoMillis() <= maxSwitchAge
                 && packet.attackRotationDeltaDegrees() >= minRotation;
     }
 
     private String details(PacketSnapshot packet, double aimError, double tps, String reason) {
         return String.format(Locale.US,
-                "%s aimErr=%.3f rotDelta=%.2f targets=%d switch=%dms attack=%dms mean=%.2f std=%.2f samples=%d rtt=%d jitter=%d tps=%.2f",
+                "%s aimErr=%.3f rotDelta=%.2f targets=%d switch=%dms switchAge=%dms attack=%dms mean=%.2f std=%.2f samples=%d rtt=%d jitter=%d tps=%.2f",
                 reason,
                 aimError,
                 packet.attackRotationDeltaDegrees(),
                 packet.recentDistinctTargets(),
                 packet.targetSwitchIntervalMillis(),
+                packet.lastTargetSwitchAgoMillis(),
                 packet.lastAttackIntervalMillis(),
                 packet.attackIntervalMeanMillis(),
                 packet.attackIntervalStdDevMillis(),
