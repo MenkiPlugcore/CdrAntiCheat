@@ -111,10 +111,12 @@ public final class AlertService implements AutoCloseable {
                                        ObservationSnapshot observation,
                                        EvidenceSnapshot evidence,
                                        String action) {
+        String occurred = LOG_TIME.format(Instant.ofEpochMilli(evidence.capturedAtMillis()));
         return String.format(
                 Locale.US,
                 "**CdrAntiCheat Observation**\n"
                         + "**Player:** %s\n"
+                        + "**Occurred:** `%s`\n"
                         + "**Status:** %s\n"
                         + "**Confidence:** %.1f%%\n"
                         + "**Check:** `%s` | VL %.2f\n"
@@ -128,6 +130,7 @@ public final class AlertService implements AutoCloseable {
                         + "**Evidence:** %s\n"
                         + "**Action:** %s",
                 escapeDiscord(player.getName()),
+                occurred,
                 observation.status().displayName(),
                 observation.confidence(),
                 checkId,
