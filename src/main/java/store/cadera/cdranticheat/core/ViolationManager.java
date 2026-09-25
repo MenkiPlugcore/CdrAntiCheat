@@ -6,6 +6,10 @@ import org.bukkit.scheduler.BukkitTask;
 import store.cadera.cdranticheat.CdrAntiCheat;
 import store.cadera.cdranticheat.alert.AlertService;
 import store.cadera.cdranticheat.compat.BedrockDetector;
+import store.cadera.cdranticheat.observation.EvidenceSnapshot;
+import store.cadera.cdranticheat.observation.ObservationManager;
+import store.cadera.cdranticheat.observation.ObservationSnapshot;
+import store.cadera.cdranticheat.observation.ObservationUpdate;
 
 import java.util.HashMap;
 import java.util.Iterator;
@@ -20,14 +24,20 @@ public final class ViolationManager {
     private final CdrAntiCheat plugin;
     private final AlertService alertService;
     private final BedrockDetector bedrockDetector;
+    private final ObservationManager observationManager;
     private final Map<UUID, Map<String, ViolationState>> violations = new HashMap<>();
     private final Map<UUID, Map<String, Long>> lastAlerts = new HashMap<>();
+    private final Map<UUID, Long> lastObservationAlerts = new HashMap<>();
     private BukkitTask decayTask;
 
-    public ViolationManager(CdrAntiCheat plugin, AlertService alertService, BedrockDetector bedrockDetector) {
+    public ViolationManager(CdrAntiCheat plugin,
+                            AlertService alertService,
+                            BedrockDetector bedrockDetector,
+                            ObservationManager observationManager) {
         this.plugin = plugin;
         this.alertService = alertService;
         this.bedrockDetector = bedrockDetector;
+        this.observationManager = observationManager;
     }
 
     public void start() {
@@ -65,13 +75,32 @@ public final class ViolationManager {
         state.add(appliedAmount, now);
         double currentLevel = state.level();
 
+        ObservationUpdate observationUpdate = observationManager.record(
+                player.getUniqueId(), normalizedCheck, appliedAmount, now
+        );
+        ObservationSnapshot observation = observationUpdate.snapshot();
+
         double alertLevel = plugin.getConfig().getDouble("checks." + normalizedCheck + ".alert-vl", 1.0);
-        if (currentLevel >= alertLevel && canAlert(player.getUniqueId(), normalizedCheck, now)) {
-            alertService.alert(player, normalizedCheck, currentLevel, details, bedrock);
+        boolean observationVisible = observation.status().atLeast(observationManager.minimumAlertStatus());
+        if (currentLevel >= alertLevel
+                && observationVisible
+                && canAlert(player.getUniqueId(), normalizedCheck, now)
+                && canObservationAlert(player.getUniqueId(), observationUpdate.statusChanged(), now)) {
+            alertService.alert(
+                    player,
+                    normalizedCheck,
+                    currentLevel,
+                    details,
+                    bedrock,
+                    observation,
+                    EvidenceSnapshot.capture(plugin, player),
+                    isEnforcementEnabled()
+            );
         }
 
         double kickLevel = plugin.getConfig().getDouble("checks." + normalizedCheck + ".kick-vl", -1.0);
-        if (plugin.getConfig().getBoolean("actions.kick.enabled", true)
+        if (isEnforcementEnabled()
+                && plugin.getConfig().getBoolean("actions.kick.enabled", true)
                 && kickLevel > 0.0
                 && previousLevel < kickLevel
                 && currentLevel >= kickLevel) {
@@ -85,6 +114,11 @@ public final class ViolationManager {
         return new FlagResult(true, currentLevel, bedrock);
     }
 
+    public boolean isEnforcementEnabled() {
+        String mode = plugin.getConfig().getString("observation.enforcement-mode", "observe");
+        return mode != null && mode.equalsIgnoreCase("enforce");
+    }
+
     private boolean canAlert(UUID uuid, String checkId, long now) {
         long cooldown = Math.max(0L, plugin.getConfig().getLong("alerts.cooldown-ms", 1000L));
         Map<String, Long> playerAlerts = lastAlerts.computeIfAbsent(uuid, ignored -> new HashMap<>());
@@ -93,6 +127,17 @@ public final class ViolationManager {
             return false;
         }
         playerAlerts.put(checkId, now);
+        return true;
+    }
+
+    private boolean canObservationAlert(UUID uuid, boolean statusChanged, long now) {
+        long previous = lastObservationAlerts.getOrDefault(uuid, 0L);
+        long cooldown = Math.max(0L,
+                plugin.getConfig().getLong("alerts.observation-cooldown-ms", 5000L));
+        if (!statusChanged && now - previous < cooldown) {
+            return false;
+        }
+        lastObservationAlerts.put(uuid, now);
         return true;
     }
 
@@ -164,6 +209,7 @@ public final class ViolationManager {
             if (playerStates.isEmpty() || offlineExpired) {
                 players.remove();
                 lastAlerts.remove(uuid);
+                lastObservationAlerts.remove(uuid);
             }
         }
     }
@@ -175,5 +221,6 @@ public final class ViolationManager {
         }
         violations.clear();
         lastAlerts.clear();
+        lastObservationAlerts.clear();
     }
 }
