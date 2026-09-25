@@ -2,6 +2,36 @@
 
 All notable changes to CdrAntiCheat are documented here.
 
+## [0.3.0-SNAPSHOT] - 2026-09-25
+
+### Added
+
+- Combat correlation telemetry on top of the v0.2 PacketEvents engine.
+- Attack target entity ID tracking.
+- Rolling attack interval samples with mean and standard deviation.
+- Short-window distinct target counting.
+- Target-switch interval tracking.
+- Attack-to-attack rotation delta tracking.
+- Teleport grace visibility in packet diagnostics.
+- `aim-a` repeated snap-lock heuristic.
+- `multitarget-a` rapid distinct-target heuristic.
+- `attack-timing-a` low-variance attack cadence heuristic.
+- `killaura-a` multi-signal correlation score combining aim, switching, multi-target, timing, and extreme interval evidence.
+- Combat safety gates for TPS, RTT, jitter, teleport grace, recent velocity, packet age, and packet target correlation.
+- Expanded `/cdrac packet <player>` combat diagnostics.
+
+### Changed
+
+- `reach-a` now correlates the Bukkit damage target with the latest attack packet when the packet engine is active.
+- `reach-a` prefers PacketEvents keepalive RTT and jitter for conservative latency compensation, with Bukkit ping as fallback.
+- Advanced combat correlation defaults to player targets during initial production calibration.
+- New combat-correlation checks are skipped for detected Floodgate/Bedrock clients by default.
+
+### Notes
+
+- v0.3 combat checks intentionally use buffers and multiple weak/strong signals rather than single-hit punishment.
+- Hitbox ray tracing and critical-hit validation remain planned follow-up work inside the v0.3.x line.
+
 ## [0.2.0-SNAPSHOT] - 2026-09-25
 
 ### Added
