@@ -9,6 +9,7 @@ import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import store.cadera.cdranticheat.CdrAntiCheat;
+import store.cadera.cdranticheat.packet.PacketSnapshot;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -43,6 +44,7 @@ public final class AntiCheatCommand implements TabExecutor {
             case "reload" -> reload(sender);
             case "alerts" -> toggleAlerts(sender);
             case "violations", "vl" -> showViolations(sender, args);
+            case "packet", "packets" -> showPacket(sender, args);
             default -> sendHelp(sender, label);
         }
         return true;
@@ -52,6 +54,10 @@ public final class AntiCheatCommand implements TabExecutor {
         sender.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.RED + "CdrAC" + ChatColor.DARK_GRAY + "] "
                 + ChatColor.WHITE + "v" + plugin.getDescription().getVersion());
         sender.sendMessage(ChatColor.GRAY + "Paper target: " + ChatColor.WHITE + "1.21.11 / Java 21");
+        sender.sendMessage(ChatColor.GRAY + "Packet engine: "
+                + (plugin.getPacketEngine().isAvailable()
+                ? ChatColor.GREEN + plugin.getPacketEngine().providerName()
+                : ChatColor.YELLOW + plugin.getPacketEngine().providerName()));
         sender.sendMessage(ChatColor.GRAY + "DiscordSRV: "
                 + (plugin.getAlertService().isDiscordAvailable() ? ChatColor.GREEN + "available" : ChatColor.YELLOW + "fallback mode"));
         sender.sendMessage(ChatColor.GRAY + "Floodgate API: "
@@ -60,7 +66,8 @@ public final class AntiCheatCommand implements TabExecutor {
 
     private void reload(CommandSender sender) {
         plugin.reloadConfig();
-        sender.sendMessage(ChatColor.GREEN + "CdrAntiCheat config berhasil direload.");
+        plugin.getPacketEngine().reload();
+        sender.sendMessage(ChatColor.GREEN + "CdrAntiCheat config dan packet engine berhasil direload.");
     }
 
     private void toggleAlerts(CommandSender sender) {
@@ -100,6 +107,52 @@ public final class AntiCheatCommand implements TabExecutor {
         ));
     }
 
+    private void showPacket(CommandSender sender, String[] args) {
+        if (args.length < 2) {
+            sender.sendMessage(ChatColor.RED + "Gunakan: /cdrac packet <player>");
+            return;
+        }
+
+        Player target = Bukkit.getPlayerExact(args[1]);
+        if (target == null) {
+            sender.sendMessage(ChatColor.RED + "Player harus sedang online.");
+            return;
+        }
+
+        PacketSnapshot snapshot = plugin.getPacketEngine().snapshot(target.getUniqueId());
+        if (!snapshot.available()) {
+            sender.sendMessage(ChatColor.YELLOW + "Packet telemetry tidak tersedia untuk " + target.getName() + ".");
+            return;
+        }
+
+        sender.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.RED + "CdrAC" + ChatColor.DARK_GRAY + "] "
+                + ChatColor.YELLOW + target.getName() + ChatColor.GRAY + " packet telemetry:");
+        sender.sendMessage(ChatColor.GRAY + "Inbound: " + ChatColor.WHITE
+                + format(snapshot.inboundPacketsPerSecond()) + " pps"
+                + ChatColor.DARK_GRAY + " | " + ChatColor.GRAY + "Movement: " + ChatColor.WHITE
+                + format(snapshot.movementPacketsPerSecond()) + " pps");
+        sender.sendMessage(ChatColor.GRAY + "KeepAlive RTT: " + ChatColor.WHITE
+                + millis(snapshot.keepAliveRttMillis())
+                + ChatColor.DARK_GRAY + " | " + ChatColor.GRAY + "Jitter: " + ChatColor.WHITE
+                + millis(snapshot.keepAliveJitterMillis()));
+        sender.sendMessage(ChatColor.GRAY + "Rotation: " + ChatColor.WHITE
+                + "yaw=" + format(snapshot.yaw()) + " pitch=" + format(snapshot.pitch())
+                + ChatColor.DARK_GRAY + " | " + ChatColor.GRAY + "delta=" + ChatColor.WHITE
+                + format(snapshot.deltaYaw()) + "/" + format(snapshot.deltaPitch()));
+        sender.sendMessage(ChatColor.GRAY + "Buffers: " + ChatColor.WHITE
+                + "timer=" + snapshot.timerBuffer()
+                + " badPacket=" + snapshot.badPacketBuffer()
+                + " packetRate=" + snapshot.packetRateBuffer());
+        sender.sendMessage(ChatColor.GRAY + "Velocity: " + ChatColor.WHITE
+                + format(snapshot.velocityX()) + ", " + format(snapshot.velocityY()) + ", " + format(snapshot.velocityZ())
+                + ChatColor.DARK_GRAY + " | " + ChatColor.GRAY + "last=" + ChatColor.WHITE
+                + millis(snapshot.lastVelocityAgoMillis()));
+        sender.sendMessage(ChatColor.GRAY + "Last attack: " + ChatColor.WHITE
+                + millis(snapshot.lastAttackAgoMillis())
+                + ChatColor.DARK_GRAY + " | " + ChatColor.GRAY + "tracked=" + ChatColor.WHITE
+                + snapshot.trackedForMillis() + "ms");
+    }
+
     private void sendHelp(CommandSender sender, String label) {
         sender.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.RED + "CdrAC" + ChatColor.DARK_GRAY + "] "
                 + ChatColor.WHITE + "Commands");
@@ -107,6 +160,7 @@ public final class AntiCheatCommand implements TabExecutor {
         sender.sendMessage(ChatColor.GRAY + "/" + label + " reload");
         sender.sendMessage(ChatColor.GRAY + "/" + label + " alerts");
         sender.sendMessage(ChatColor.GRAY + "/" + label + " violations <player>");
+        sender.sendMessage(ChatColor.GRAY + "/" + label + " packet <player>");
     }
 
     @Override
@@ -115,9 +169,12 @@ public final class AntiCheatCommand implements TabExecutor {
                                                  @NotNull String alias,
                                                  @NotNull String[] args) {
         if (args.length == 1) {
-            return filter(List.of("status", "reload", "alerts", "violations"), args[0]);
+            return filter(List.of("status", "reload", "alerts", "violations", "packet"), args[0]);
         }
-        if (args.length == 2 && (args[0].equalsIgnoreCase("violations") || args[0].equalsIgnoreCase("vl"))) {
+        if (args.length == 2 && (args[0].equalsIgnoreCase("violations")
+                || args[0].equalsIgnoreCase("vl")
+                || args[0].equalsIgnoreCase("packet")
+                || args[0].equalsIgnoreCase("packets"))) {
             List<String> players = Bukkit.getOnlinePlayers().stream().map(Player::getName).toList();
             return filter(players, args[1]);
         }
@@ -133,5 +190,13 @@ public final class AntiCheatCommand implements TabExecutor {
             }
         }
         return result;
+    }
+
+    private static String format(double value) {
+        return String.format(Locale.US, "%.2f", value);
+    }
+
+    private static String millis(long value) {
+        return value < 0L ? "n/a" : value + "ms";
     }
 }
