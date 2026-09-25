@@ -12,6 +12,7 @@ final class PacketPlayerData {
 
     private static final long COMBAT_HISTORY_NANOS = 1_000_000_000L;
     private static final long DISTINCT_TARGET_WINDOW_NANOS = 250_000_000L;
+    private static final long COMBAT_SESSION_GAP_NANOS = 2_000_000_000L;
     private static final int MAX_ATTACK_INTERVAL_SAMPLES = 24;
 
     private final UUID uuid;
@@ -161,6 +162,7 @@ final class PacketPlayerData {
         movementTimes.clear();
         movementPps = 0.0;
         timerBuffer = 0;
+        resetCombatHistory();
     }
 
     synchronized boolean isInTeleportGrace(long nowNanos) {
@@ -190,7 +192,9 @@ final class PacketPlayerData {
     synchronized void recordAttack(long nowNanos, int targetEntityId) {
         if (lastAttackNanos > 0L) {
             long interval = nowNanos - lastAttackNanos;
-            if (interval > 0L && interval <= 2_000_000_000L) {
+            if (interval > COMBAT_SESSION_GAP_NANOS) {
+                resetCombatHistory();
+            } else if (interval > 0L) {
                 attackIntervalsNanos.addLast(interval);
                 while (attackIntervalsNanos.size() > MAX_ATTACK_INTERVAL_SAMPLES) {
                     attackIntervalsNanos.removeFirst();
@@ -284,6 +288,17 @@ final class PacketPlayerData {
                 velocityY,
                 velocityZ
         );
+    }
+
+    private void resetCombatHistory() {
+        attacks.clear();
+        attackIntervalsNanos.clear();
+        lastAttackNanos = 0L;
+        lastTargetEntityId = -1;
+        lastTargetSwitchNanos = 0L;
+        targetSwitchIntervalNanos = -1L;
+        hasAttackRotation = false;
+        attackRotationDeltaDegrees = 0.0;
     }
 
     private void pruneAttacks(long nowNanos) {
