@@ -2,6 +2,37 @@
 
 All notable changes to CdrAntiCheat are documented here.
 
+## [0.3.1-SNAPSHOT] - 2026-09-25
+
+### Added
+
+- Confidence & Observation Layer with `NORMAL`, `WATCH`, `ABNORMAL`, `SUSPICIOUS`, and `HIGH RISK` states.
+- Configurable evidence weights per check.
+- Reduced contribution from rapid repeated flags of the same check.
+- Correlation bonus when independent checks occur inside the observation window.
+- Confidence decay after quiet periods so legitimate players return toward `NORMAL`.
+- Default `observe` enforcement mode that collects evidence and alerts staff without kick/setback actions.
+- `/cdrac inspect <player>` observation diagnostics.
+- Incident evidence snapshots containing timestamp, world, coordinates, yaw/pitch, platform, ping, PacketEvents RTT/jitter, TPS, check, VL, status, confidence, and signal counts.
+- Combat evidence now includes target identity and target distance where available.
+- DiscordSRV observation messages now include status, confidence, incident time, world, XYZ, rotation, network state, TPS, signal counts, evidence, and action mode.
+- Global observation alert cooldown with immediate delivery on observation status changes.
+
+### Changed
+
+- `WATCH` is silent by default. Staff/Discord alerts begin at `ABNORMAL` unless configured otherwise.
+- Existing kick thresholds are ignored while `observation.enforcement-mode: observe` is active.
+- Fly setbacks are ignored in observe mode.
+- Impossible/non-finite movement can still be cancelled through a dedicated safety option even in observe mode.
+- File violation logs now include observation confidence and incident context.
+- DiscordSRV remains optional and continues to fall back to in-game staff alerts when delivery is unavailable.
+
+### Safety / False-positive policy
+
+- A single check flag is treated as evidence, not proof of cheating.
+- Repeated evidence from one source is weighted less than multiple independent correlated signals.
+- Default operation remains tracking-only until legitimate Vephilim traffic has been calibrated.
+
 ## [0.3.0-SNAPSHOT] - 2026-09-25
 
 ### Added
