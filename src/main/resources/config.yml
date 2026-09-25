@@ -93,6 +93,7 @@ combat-engine:
     required-score: 4
     required-buffer: 3
     max-switch-interval-ms: 90
+    max-switch-age-ms: 140
     min-switch-rotation-degrees: 35.0
     extreme-interval-ms: 20
 
