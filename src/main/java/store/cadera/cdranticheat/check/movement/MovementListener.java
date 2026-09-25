@@ -67,7 +67,12 @@ public final class MovementListener implements Listener {
         if (!isFinite(to) || Math.abs(to.getPitch()) > 90.01F) {
             violations.flag(player, "bad-movement-a", 1.0,
                     "non-finite movement or invalid pitch=" + to.getPitch());
-            event.setCancelled(true);
+            boolean safetyCancel = plugin.getConfig().getBoolean(
+                    "observation.safety-cancel-impossible-movement", true
+            );
+            if (violations.isEnforcementEnabled() || safetyCancel) {
+                event.setCancelled(true);
+            }
             return;
         }
 
@@ -171,7 +176,9 @@ public final class MovementListener implements Listener {
             );
 
             double setbackLevel = plugin.getConfig().getDouble("checks.fly-a.setback-vl", 5.0);
-            if (result.accepted() && result.violationLevel() >= setbackLevel) {
+            if (violations.isEnforcementEnabled()
+                    && result.accepted()
+                    && result.violationLevel() >= setbackLevel) {
                 attemptSetback(player, now);
             }
             hover = Math.max(1, requiredHover / 2);
