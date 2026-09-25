@@ -40,15 +40,22 @@ The roadmap is intentionally incremental. Anti-cheat systems become unreliable w
 
 ## v0.3.x - Combat Correlation Engine
 
-- packet attack + rotation correlation
-- reach correlation improvements using packet timeline
-- rotation/aim analysis
-- hitbox ray tracing
-- multi-target / improbable target switching heuristics
-- attack timing analysis
-- velocity-aware combat exemptions
-- critical-hit validation
-- groundwork for KillAura / AimAssist evidence without single-signal punishment
+- [x] packet attack + target entity correlation
+- [x] reach correlation improvements using packet RTT/jitter and target match
+- [x] rotation/aim correlation telemetry
+- [x] `aim-a` repeated snap-lock heuristic
+- [x] multi-target / improbable target switching telemetry
+- [x] `multitarget-a`
+- [x] rolling attack interval statistics
+- [x] `attack-timing-a`
+- [x] velocity-aware combat grace
+- [x] TPS / RTT / jitter combat safety gates
+- [x] `killaura-a` multi-signal evidence score
+- [x] extended staff combat telemetry in `/cdrac packet <player>`
+- [ ] hitbox ray tracing
+- [ ] critical-hit validation
+- [ ] deeper line-of-sight / occlusion correlation
+- [ ] production calibration and threshold tuning from legitimate Vephilim PvP
 
 ## v0.4.x - Movement Simulation
 
