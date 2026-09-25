@@ -1,4 +1,4 @@
-# CdrAntiCheat v0.3.1
+# CdrAntiCheat v0.3.2
 # Conservative defaults are intentional. Tune after reviewing real server evidence.
 
 alerts:
@@ -61,6 +61,20 @@ observation:
     multitarget-a: 14.0
     attack-timing-a: 10.0
     killaura-a: 20.0
+
+evidence:
+  enabled: true
+  # A quiet gap creates a new evidence session, separating unrelated gameplay periods.
+  session-gap-seconds: 45
+  # RAM history is bounded. Total session counters are preserved even when old detail rows are trimmed.
+  max-sessions-per-player: 5
+  max-records-per-session: 40
+  # Runtime history is available to staff commands for recently tracked/offline players.
+  runtime-retention-minutes: 120
+  entries-per-page: 5
+  # Every accepted flag, including silent WATCH evidence, can be appended to a persistent daily log.
+  log-to-file: true
+  log-directory: evidence
 
 compatibility:
   floodgate-detection: true
