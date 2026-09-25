@@ -9,6 +9,7 @@ import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import store.cadera.cdranticheat.CdrAntiCheat;
+import store.cadera.cdranticheat.observation.ObservationSnapshot;
 import store.cadera.cdranticheat.packet.PacketSnapshot;
 
 import java.util.ArrayList;
@@ -45,6 +46,7 @@ public final class AntiCheatCommand implements TabExecutor {
             case "alerts" -> toggleAlerts(sender);
             case "violations", "vl" -> showViolations(sender, args);
             case "packet", "packets" -> showPacket(sender, args);
+            case "inspect", "observe" -> showObservation(sender, args);
             default -> sendHelp(sender, label);
         }
         return true;
@@ -54,6 +56,10 @@ public final class AntiCheatCommand implements TabExecutor {
         sender.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.RED + "CdrAC" + ChatColor.DARK_GRAY + "] "
                 + ChatColor.WHITE + "v" + plugin.getDescription().getVersion());
         sender.sendMessage(ChatColor.GRAY + "Paper target: " + ChatColor.WHITE + "1.21.11 / Java 21");
+        sender.sendMessage(ChatColor.GRAY + "Mode: "
+                + (plugin.getViolationManager().isEnforcementEnabled()
+                ? ChatColor.RED + "ENFORCE"
+                : ChatColor.GREEN + "OBSERVE (tracking only)"));
         sender.sendMessage(ChatColor.GRAY + "Packet engine: "
                 + (plugin.getPacketEngine().isAvailable()
                 ? ChatColor.GREEN + plugin.getPacketEngine().providerName()
@@ -71,7 +77,7 @@ public final class AntiCheatCommand implements TabExecutor {
     private void reload(CommandSender sender) {
         plugin.reloadConfig();
         plugin.getPacketEngine().reload();
-        sender.sendMessage(ChatColor.GREEN + "CdrAntiCheat config, packet engine, dan combat profile berhasil direload.");
+        sender.sendMessage(ChatColor.GREEN + "CdrAntiCheat config, packet engine, combat profile, dan observation profile berhasil direload.");
     }
 
     private void toggleAlerts(CommandSender sender) {
@@ -109,6 +115,36 @@ public final class AntiCheatCommand implements TabExecutor {
                 ChatColor.GRAY + "- " + ChatColor.RED + check + ChatColor.DARK_GRAY + ": "
                         + ChatColor.WHITE + String.format(Locale.US, "%.2f", level)
         ));
+    }
+
+    private void showObservation(CommandSender sender, String[] args) {
+        if (args.length < 2) {
+            sender.sendMessage(ChatColor.RED + "Gunakan: /cdrac inspect <player>");
+            return;
+        }
+
+        Player target = Bukkit.getPlayerExact(args[1]);
+        if (target == null) {
+            sender.sendMessage(ChatColor.RED + "Player harus sedang online.");
+            return;
+        }
+
+        ObservationSnapshot snapshot = plugin.getObservationManager().snapshot(target.getUniqueId());
+        sender.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.RED + "CdrAC" + ChatColor.DARK_GRAY + "] "
+                + ChatColor.YELLOW + target.getName() + ChatColor.GRAY + " observation:");
+        sender.sendMessage(ChatColor.GRAY + "Status: " + ChatColor.WHITE + snapshot.status().displayName()
+                + ChatColor.DARK_GRAY + " | " + ChatColor.GRAY + "Confidence: " + ChatColor.WHITE
+                + String.format(Locale.US, "%.1f%%", snapshot.confidence()));
+        sender.sendMessage(ChatColor.GRAY + "Score: " + ChatColor.WHITE + format(snapshot.score())
+                + ChatColor.DARK_GRAY + " | " + ChatColor.GRAY + "Recent flags: " + ChatColor.WHITE
+                + snapshot.recentFlags()
+                + ChatColor.DARK_GRAY + " | " + ChatColor.GRAY + "Distinct checks: " + ChatColor.WHITE
+                + snapshot.distinctChecks());
+        sender.sendMessage(ChatColor.GRAY + "Last signal: " + ChatColor.WHITE + snapshot.lastCheck());
+        sender.sendMessage(ChatColor.GRAY + "Action mode: "
+                + (plugin.getViolationManager().isEnforcementEnabled()
+                ? ChatColor.RED + "ENFORCE"
+                : ChatColor.GREEN + "TRACKING ONLY"));
     }
 
     private void showPacket(CommandSender sender, String[] args) {
@@ -177,6 +213,7 @@ public final class AntiCheatCommand implements TabExecutor {
         sender.sendMessage(ChatColor.GRAY + "/" + label + " reload");
         sender.sendMessage(ChatColor.GRAY + "/" + label + " alerts");
         sender.sendMessage(ChatColor.GRAY + "/" + label + " violations <player>");
+        sender.sendMessage(ChatColor.GRAY + "/" + label + " inspect <player>");
         sender.sendMessage(ChatColor.GRAY + "/" + label + " packet <player>");
     }
 
@@ -186,12 +223,14 @@ public final class AntiCheatCommand implements TabExecutor {
                                                  @NotNull String alias,
                                                  @NotNull String[] args) {
         if (args.length == 1) {
-            return filter(List.of("status", "reload", "alerts", "violations", "packet"), args[0]);
+            return filter(List.of("status", "reload", "alerts", "violations", "inspect", "packet"), args[0]);
         }
         if (args.length == 2 && (args[0].equalsIgnoreCase("violations")
                 || args[0].equalsIgnoreCase("vl")
                 || args[0].equalsIgnoreCase("packet")
-                || args[0].equalsIgnoreCase("packets"))) {
+                || args[0].equalsIgnoreCase("packets")
+                || args[0].equalsIgnoreCase("inspect")
+                || args[0].equalsIgnoreCase("observe"))) {
             List<String> players = Bukkit.getOnlinePlayers().stream().map(Player::getName).toList();
             return filter(players, args[1]);
         }
