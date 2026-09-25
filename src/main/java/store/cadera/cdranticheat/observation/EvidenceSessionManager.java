@@ -151,6 +151,15 @@ public final class EvidenceSessionManager implements AutoCloseable {
         return history == null || history.playerName == null ? "unknown" : history.playerName;
     }
 
+    public synchronized List<String> trackedNames() {
+        return histories.values().stream()
+                .map(history -> history.playerName)
+                .filter(name -> name != null && !name.isBlank())
+                .distinct()
+                .sorted(String.CASE_INSENSITIVE_ORDER)
+                .toList();
+    }
+
     private void trimRecords(SessionState session) {
         int maximum = Math.max(5,
                 plugin.getConfig().getInt("evidence.max-records-per-session", 40));
