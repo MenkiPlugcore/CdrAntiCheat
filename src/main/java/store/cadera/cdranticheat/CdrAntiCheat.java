@@ -4,6 +4,7 @@ import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 import store.cadera.cdranticheat.alert.AlertService;
+import store.cadera.cdranticheat.check.combat.CombatCorrelationListener;
 import store.cadera.cdranticheat.check.combat.CombatListener;
 import store.cadera.cdranticheat.check.movement.MovementListener;
 import store.cadera.cdranticheat.check.player.AutoClickerListener;
@@ -35,6 +36,7 @@ public final class CdrAntiCheat extends JavaPlugin {
         PluginManager pluginManager = getServer().getPluginManager();
         pluginManager.registerEvents(new MovementListener(this, violationManager), this);
         pluginManager.registerEvents(new CombatListener(this, violationManager), this);
+        pluginManager.registerEvents(new CombatCorrelationListener(this, violationManager), this);
         pluginManager.registerEvents(new AutoClickerListener(this, violationManager), this);
 
         AntiCheatCommand antiCheatCommand = new AntiCheatCommand(this);
@@ -46,12 +48,12 @@ public final class CdrAntiCheat extends JavaPlugin {
         command.setTabCompleter(antiCheatCommand);
 
         getLogger().info("CdrAntiCheat " + getDescription().getVersion() + " enabled.");
-        getLogger().info("Checks: bad-movement-a, speed-a, fly-a, reach-a, autoclicker-a, timer-a, bad-packets-a");
+        getLogger().info("Checks: bad-movement-a, speed-a, fly-a, reach-a, autoclicker-a, timer-a, bad-packets-a, aim-a, multitarget-a, attack-timing-a, killaura-a");
         if (packetEngineStarted) {
             getLogger().info("Packet engine active via " + packetEngine.providerName() + ".");
         } else {
             getLogger().warning("Packet engine is unavailable (" + packetEngine.providerName()
-                    + "). Event-level checks remain active, but packet checks are disabled.");
+                    + "). Event-level checks remain active, but packet and combat-correlation checks are disabled.");
         }
 
         if (alertService.isDiscordAvailable()) {
