@@ -2,6 +2,7 @@ package store.cadera.cdranticheat.packet;
 
 import com.github.retrooper.packetevents.PacketEvents;
 import com.github.retrooper.packetevents.event.PacketListener;
+import com.github.retrooper.packetevents.event.PacketListenerCommon;
 import com.github.retrooper.packetevents.event.PacketListenerPriority;
 import com.github.retrooper.packetevents.event.PacketReceiveEvent;
 import com.github.retrooper.packetevents.event.PacketSendEvent;
@@ -37,7 +38,7 @@ public final class PacketEventsEngine implements PacketEngine, Listener {
 
     private volatile Settings settings;
     private volatile boolean active;
-    private PacketListener packetListener;
+    private PacketListenerCommon packetListener;
 
     public PacketEventsEngine(CdrAntiCheat plugin, ViolationManager violations) {
         this.plugin = plugin;
@@ -54,8 +55,9 @@ public final class PacketEventsEngine implements PacketEngine, Listener {
         }
 
         try {
-            packetListener = new CorePacketListener();
-            PacketEvents.getAPI().getEventManager().registerListener(packetListener, PacketListenerPriority.NORMAL);
+            packetListener = PacketEvents.getAPI().getEventManager().registerListener(
+                    new CorePacketListener(), PacketListenerPriority.NORMAL
+            );
             plugin.getServer().getPluginManager().registerEvents(this, plugin);
             active = true;
             return true;
