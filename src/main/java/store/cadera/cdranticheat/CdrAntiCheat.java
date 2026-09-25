@@ -11,6 +11,7 @@ import store.cadera.cdranticheat.check.player.AutoClickerListener;
 import store.cadera.cdranticheat.command.AntiCheatCommand;
 import store.cadera.cdranticheat.compat.BedrockDetector;
 import store.cadera.cdranticheat.core.ViolationManager;
+import store.cadera.cdranticheat.licensing.LicenseManager;
 import store.cadera.cdranticheat.observation.EvidenceSessionManager;
 import store.cadera.cdranticheat.observation.ObservationManager;
 import store.cadera.cdranticheat.packet.PacketEngine;
@@ -18,6 +19,7 @@ import store.cadera.cdranticheat.packet.PacketEngineFactory;
 
 public final class CdrAntiCheat extends JavaPlugin {
 
+    private LicenseManager licenseManager;
     private AlertService alertService;
     private BedrockDetector bedrockDetector;
     private ObservationManager observationManager;
@@ -27,6 +29,15 @@ public final class CdrAntiCheat extends JavaPlugin {
 
     @Override
     public void onEnable() {
+        licenseManager = new LicenseManager(this);
+        if (!licenseManager.initialize()) {
+            getLogger().severe("CdrAntiCheat cannot start without a valid MENKIESTES runtime license.");
+            getLogger().severe("Restore the original plugins/CdrAntiCheat/LICENSE.txt and restart the server.");
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
+        licenseManager.startMonitor();
+
         saveDefaultConfig();
 
         bedrockDetector = new BedrockDetector(this);
@@ -62,6 +73,7 @@ public final class CdrAntiCheat extends JavaPlugin {
         command.setTabCompleter(antiCheatCommand);
 
         getLogger().info("CdrAntiCheat " + getDescription().getVersion() + " enabled.");
+        getLogger().info("License: VALID (SHA-256 " + licenseManager.expectedHash().substring(0, 12) + "...).");
         getLogger().info("Checks: bad-movement-a, speed-a, fly-a, reach-a, autoclicker-a, timer-a, bad-packets-a, aim-a, multitarget-a, attack-timing-a, killaura-a");
         getLogger().info("Observation engine: " + (violationManager.isEnforcementEnabled() ? "ENFORCE" : "OBSERVE") + " mode.");
         getLogger().info("Evidence sessions: "
@@ -82,6 +94,9 @@ public final class CdrAntiCheat extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (licenseManager != null) {
+            licenseManager.stopMonitor();
+        }
         if (packetEngine != null) {
             packetEngine.stop();
         }
@@ -97,6 +112,10 @@ public final class CdrAntiCheat extends JavaPlugin {
         if (alertService != null) {
             alertService.close();
         }
+    }
+
+    public LicenseManager getLicenseManager() {
+        return licenseManager;
     }
 
     public AlertService getAlertService() {
