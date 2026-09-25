@@ -7,7 +7,6 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerAnimationEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.inventory.EquipmentSlot;
 import store.cadera.cdranticheat.CdrAntiCheat;
 import store.cadera.cdranticheat.core.ViolationManager;
 
@@ -33,7 +32,7 @@ public final class AutoClickerListener implements Listener {
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onAnimation(PlayerAnimationEvent event) {
         Player player = event.getPlayer();
-        if (event.getHand() != EquipmentSlot.HAND || !violations.isCheckEnabled("autoclicker-a")) {
+        if (!violations.isCheckEnabled("autoclicker-a")) {
             return;
         }
         if (player.getGameMode() == GameMode.SPECTATOR) {
