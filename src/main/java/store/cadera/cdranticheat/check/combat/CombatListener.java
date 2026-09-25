@@ -59,7 +59,6 @@ public final class CombatListener implements Listener {
             if (packet.teleportGraceRemainingMillis() > 0L) {
                 return;
             }
-            // When the packet engine is active, avoid evaluating a stale or unrelated Bukkit damage event.
             if (!correlated) {
                 return;
             }
@@ -95,18 +94,21 @@ public final class CombatListener implements Listener {
                 + Math.min(jitter, maxJitterComp) * jitterPerMs;
 
         if (distance > allowed) {
+            String targetName = target instanceof Player targetPlayer
+                    ? targetPlayer.getName()
+                    : target.getType().name();
             violations.flag(
                     player,
                     "reach-a",
                     1.0,
                     String.format(Locale.US,
-                            "distance=%.3f max=%.3f latency=%d jitter=%d packetAge=%d target=%s",
+                            "target=%s distance=%.3f max=%.3f latency=%d jitter=%d packetAge=%d",
+                            targetName,
                             distance,
                             allowed,
                             latency,
                             jitter,
-                            packet.available() ? packet.lastAttackAgoMillis() : -1L,
-                            target.getType().name())
+                            packet.available() ? packet.lastAttackAgoMillis() : -1L)
             );
         }
     }
