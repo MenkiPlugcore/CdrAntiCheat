@@ -1,4 +1,4 @@
-# CdrAntiCheat v0.2.x
+# CdrAntiCheat v0.3.x
 # Conservative defaults are intentional. Tune after reviewing real server evidence.
 
 alerts:
@@ -18,13 +18,17 @@ integrations:
 compatibility:
   floodgate-detection: true
   bedrock-threshold-multiplier: 1.75
-  # Packet cadence from Geyser/Floodgate is not identical to native Java.
-  # Timing-sensitive checks stay skipped until Bedrock baselines are calibrated.
+  # Packet cadence and combat rotation from Geyser/Floodgate are not identical to native Java.
+  # Timing/correlation-sensitive checks stay skipped until Bedrock baselines are calibrated.
   bedrock-skip-checks:
     - reach-a
     - autoclicker-a
     - timer-a
     - packet-rate-a
+    - aim-a
+    - multitarget-a
+    - attack-timing-a
+    - killaura-a
 
 violations:
   decay-per-second: 0.20
@@ -54,6 +58,44 @@ packet-engine:
     required-buffer: 4
     sample-interval-ms: 1000
 
+combat-engine:
+  # Correlation checks are primarily tuned for Java PvP. Keep this true during initial production calibration.
+  players-only: true
+  max-packet-age-ms: 220
+  velocity-grace-ms: 150
+  min-tps: 18.5
+  max-rtt-ms: 350
+  max-jitter-ms: 120
+
+  aim:
+    # Requires repeated large rotation snaps landing extremely close to target center.
+    min-snap-degrees: 42.0
+    max-error-degrees: 0.20
+    max-attack-interval-ms: 250
+    required-buffer: 4
+
+  multitarget:
+    # Packet history window is 250 ms. Three targets plus rapid switching is required.
+    min-distinct-targets: 3
+    max-switch-interval-ms: 110
+    required-buffer: 2
+
+  attack-timing:
+    # Extremely low variance across a long sample is suspicious of automated timing.
+    min-samples: 14
+    min-mean-ms: 35.0
+    max-mean-ms: 130.0
+    max-stddev-ms: 1.25
+    required-buffer: 3
+
+  killaura:
+    # KillAura is a correlation score. No single weak signal should trigger it alone.
+    required-score: 4
+    required-buffer: 3
+    max-switch-interval-ms: 90
+    min-switch-rotation-degrees: 35.0
+    extreme-interval-ms: 20
+
 checks:
   bad-movement-a:
     enabled: true
@@ -79,8 +121,11 @@ checks:
   reach-a:
     enabled: true
     base-max-distance: 3.75
+    max-packet-age-ms: 250
     max-ping-compensation-ms: 200
     compensation-per-ms: 0.0015
+    max-jitter-compensation-ms: 80
+    jitter-compensation-per-ms: 0.0008
     alert-vl: 2.0
     kick-vl: 10.0
 
@@ -109,6 +154,30 @@ checks:
     enabled: false
     alert-vl: 2.0
     kick-vl: -1.0
+
+  # Repeated high-angle snaps ending almost exactly on target center.
+  aim-a:
+    enabled: true
+    alert-vl: 2.0
+    kick-vl: 10.0
+
+  # Rapid attacks across three or more distinct targets inside the correlation window.
+  multitarget-a:
+    enabled: true
+    alert-vl: 2.0
+    kick-vl: 10.0
+
+  # Very low-variance attack cadence over a sufficiently long sample.
+  attack-timing-a:
+    enabled: true
+    alert-vl: 2.0
+    kick-vl: 10.0
+
+  # Multi-signal correlation of aim, switching, multi-target and timing evidence.
+  killaura-a:
+    enabled: true
+    alert-vl: 2.0
+    kick-vl: 12.0
 
 actions:
   kick:
