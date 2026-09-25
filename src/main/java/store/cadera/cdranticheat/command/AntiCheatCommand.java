@@ -29,7 +29,7 @@ import java.util.UUID;
 public final class AntiCheatCommand implements TabExecutor {
 
     private static final DateTimeFormatter EVIDENCE_TIME = DateTimeFormatter
-            .ofPattern("HH:mm:ss")
+            .ofPattern("MM-dd HH:mm:ss")
             .withZone(ZoneId.systemDefault());
 
     private final CdrAntiCheat plugin;
