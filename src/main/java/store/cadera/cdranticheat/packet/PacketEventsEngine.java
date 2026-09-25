@@ -148,7 +148,7 @@ public final class PacketEventsEngine implements PacketEngine, Listener {
         if (event.getPacketType() == PacketType.Play.Client.INTERACT_ENTITY) {
             WrapperPlayClientInteractEntity interact = new WrapperPlayClientInteractEntity(event);
             if (interact.getAction() == WrapperPlayClientInteractEntity.InteractAction.ATTACK) {
-                data.recordAttack(now);
+                data.recordAttack(now, interact.getEntityId());
             }
         }
     }
