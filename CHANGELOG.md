@@ -2,6 +2,37 @@
 
 All notable changes to CdrAntiCheat are documented here.
 
+## [0.3.2-SNAPSHOT] - 2026-09-25
+
+### Added
+
+- Bounded per-player evidence-session history for every accepted flag, including silent `WATCH` evidence.
+- Automatic session rotation after a configurable quiet gap.
+- Session summaries with unique ID, start/update time, evidence count, distinct checks, peak observation status/confidence, last check, and last incident location.
+- Evidence records with timestamp, check/VL, observation status/score/confidence, world/XYZ, yaw/pitch, Java/Bedrock platform, ping, PacketEvents RTT/jitter, TPS, action mode, and check-specific details.
+- Persistent daily evidence logs under `plugins/CdrAntiCheat/evidence/evidence-YYYY-MM-DD.log`.
+- `/cdrac evidence <player> [page]` paginated evidence-history command.
+- `/cdrac inspect <player>` now includes current evidence-session summary and last incident location.
+- Staff history lookup for recently tracked players after disconnect while runtime retention remains active.
+- `/cdrac status` now reports evidence-session availability.
+
+### Changed
+
+- Runtime evidence memory is bounded by configurable session count, records per session, and retention duration.
+- Total evidence counters are preserved at session level even when old detailed rows are trimmed from RAM.
+- Persistent evidence logging is separate from alert logging: silent evidence is retained even when it never reaches Discord/staff alerts.
+- Administrative reload/status messaging now includes the evidence profile.
+
+### Operational defaults
+
+- Session gap: 45 seconds.
+- Maximum retained sessions per player: 5.
+- Maximum retained detailed records per session: 40.
+- Runtime retention: 120 minutes.
+- Evidence command page size: 5.
+- Daily evidence file logging: enabled.
+- Observation enforcement mode remains `observe` by default.
+
 ## [0.3.1-SNAPSHOT] - 2026-09-25
 
 ### Added
