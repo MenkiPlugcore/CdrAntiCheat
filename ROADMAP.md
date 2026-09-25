@@ -1,43 +1,54 @@
 # CdrAntiCheat Roadmap
 
-The roadmap is intentionally incremental. Anti-cheat systems become unreliable when many aggressive detections are added before their data model, exemptions, and evidence pipeline are stable.
+The roadmap is intentionally incremental. Anti-cheat systems become unreliable when aggressive detections are added before their data model, exemptions, and evidence pipeline are stable.
 
 ## v0.1.x - Foundation
 
 - [x] Project bootstrap for Paper 1.21.11 / Java 21
-- [ ] Central violation engine
-- [ ] Violation decay and threshold handling
-- [ ] File audit logger
-- [ ] OP/staff fallback alerts
-- [ ] DiscordSRV optional alert bridge
-- [ ] Floodgate-aware Bedrock compatibility
-- [ ] Administrative command
-- [ ] `speed-a`
-- [ ] `fly-a`
-- [ ] `bad-movement-a`
-- [ ] `reach-a`
-- [ ] `autoclicker-a`
+- [x] Central violation engine
+- [x] Violation decay and threshold handling
+- [x] File audit logger
+- [x] OP/staff fallback alerts
+- [x] DiscordSRV optional alert bridge
+- [x] Floodgate-aware Bedrock compatibility
+- [x] Administrative command
+- [x] `speed-a`
+- [x] `fly-a`
+- [x] `bad-movement-a`
+- [x] `reach-a`
+- [x] `autoclicker-a`
 
 ## v0.2.x - Packet & Timing Engine
 
-- PacketEvents integration
-- packet movement timeline
-- timer detection
-- packet-order validation
-- duplicate/invalid packet checks
-- transaction/latency samples
-- keepalive sanity checks
-- server lag compensation
+- [x] PacketEvents integration
+- [x] safe fallback when PacketEvents is missing/incompatible
+- [x] thread-safe per-player packet state
+- [x] packet movement timeline / cadence sampling
+- [x] `timer-a`
+- [x] basic invalid movement/rotation packet validation (`bad-packets-a`)
+- [x] keepalive RTT and jitter samples
+- [x] rotation delta telemetry
+- [x] attack timing telemetry
+- [x] server velocity telemetry
+- [x] teleport/setback timing grace
+- [x] generic packet-rate telemetry
+- [x] optional `packet-rate-a` check (disabled by default)
+- [x] `/cdrac packet <player>` diagnostics
+- [ ] deeper packet-order/state-machine validation
+- [ ] transaction-confirmation timeline for checks that require acknowledgement correlation
+- [ ] production calibration from legitimate Vephilim traffic
 
-## v0.3.x - Combat Engine
+## v0.3.x - Combat Correlation Engine
 
-- reach correlation improvements
+- packet attack + rotation correlation
+- reach correlation improvements using packet timeline
 - rotation/aim analysis
 - hitbox ray tracing
 - multi-target / improbable target switching heuristics
 - attack timing analysis
 - velocity-aware combat exemptions
 - critical-hit validation
+- groundwork for KillAura / AimAssist evidence without single-signal punishment
 
 ## v0.4.x - Movement Simulation
 
