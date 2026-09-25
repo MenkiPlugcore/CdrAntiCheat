@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.TreeSet;
 import java.util.UUID;
 
 public final class AntiCheatCommand implements TabExecutor {
@@ -371,16 +372,23 @@ public final class AntiCheatCommand implements TabExecutor {
         if (args.length == 1) {
             return filter(List.of("status", "reload", "alerts", "violations", "inspect", "evidence", "packet"), args[0]);
         }
-        if (args.length == 2 && (args[0].equalsIgnoreCase("violations")
-                || args[0].equalsIgnoreCase("vl")
-                || args[0].equalsIgnoreCase("packet")
-                || args[0].equalsIgnoreCase("packets")
-                || args[0].equalsIgnoreCase("inspect")
-                || args[0].equalsIgnoreCase("observe")
-                || args[0].equalsIgnoreCase("evidence")
-                || args[0].equalsIgnoreCase("history"))) {
-            List<String> players = Bukkit.getOnlinePlayers().stream().map(Player::getName).toList();
-            return filter(players, args[1]);
+        if (args.length == 2) {
+            boolean packetOnly = args[0].equalsIgnoreCase("packet") || args[0].equalsIgnoreCase("packets");
+            boolean playerArgument = packetOnly
+                    || args[0].equalsIgnoreCase("violations")
+                    || args[0].equalsIgnoreCase("vl")
+                    || args[0].equalsIgnoreCase("inspect")
+                    || args[0].equalsIgnoreCase("observe")
+                    || args[0].equalsIgnoreCase("evidence")
+                    || args[0].equalsIgnoreCase("history");
+            if (playerArgument) {
+                TreeSet<String> names = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+                Bukkit.getOnlinePlayers().stream().map(Player::getName).forEach(names::add);
+                if (!packetOnly) {
+                    names.addAll(plugin.getEvidenceSessionManager().trackedNames());
+                }
+                return filter(new ArrayList<>(names), args[1]);
+            }
         }
         return List.of();
     }
