@@ -6,6 +6,7 @@ import org.bukkit.scheduler.BukkitTask;
 import store.cadera.cdranticheat.CdrAntiCheat;
 import store.cadera.cdranticheat.alert.AlertService;
 import store.cadera.cdranticheat.compat.BedrockDetector;
+import store.cadera.cdranticheat.observation.EvidenceSessionManager;
 import store.cadera.cdranticheat.observation.EvidenceSnapshot;
 import store.cadera.cdranticheat.observation.ObservationManager;
 import store.cadera.cdranticheat.observation.ObservationSnapshot;
@@ -25,6 +26,7 @@ public final class ViolationManager {
     private final AlertService alertService;
     private final BedrockDetector bedrockDetector;
     private final ObservationManager observationManager;
+    private final EvidenceSessionManager evidenceSessionManager;
     private final Map<UUID, Map<String, ViolationState>> violations = new HashMap<>();
     private final Map<UUID, Map<String, Long>> lastAlerts = new HashMap<>();
     private final Map<UUID, Long> lastObservationAlerts = new HashMap<>();
@@ -33,11 +35,13 @@ public final class ViolationManager {
     public ViolationManager(CdrAntiCheat plugin,
                             AlertService alertService,
                             BedrockDetector bedrockDetector,
-                            ObservationManager observationManager) {
+                            ObservationManager observationManager,
+                            EvidenceSessionManager evidenceSessionManager) {
         this.plugin = plugin;
         this.alertService = alertService;
         this.bedrockDetector = bedrockDetector;
         this.observationManager = observationManager;
+        this.evidenceSessionManager = evidenceSessionManager;
     }
 
     public void start() {
@@ -79,6 +83,19 @@ public final class ViolationManager {
                 player.getUniqueId(), normalizedCheck, appliedAmount, now
         );
         ObservationSnapshot observation = observationUpdate.snapshot();
+        EvidenceSnapshot evidence = EvidenceSnapshot.capture(plugin, player);
+        boolean enforcementEnabled = isEnforcementEnabled();
+
+        evidenceSessionManager.record(
+                player,
+                normalizedCheck,
+                currentLevel,
+                details,
+                bedrock,
+                observation,
+                evidence,
+                enforcementEnabled
+        );
 
         double alertLevel = plugin.getConfig().getDouble("checks." + normalizedCheck + ".alert-vl", 1.0);
         boolean observationVisible = observation.status().atLeast(observationManager.minimumAlertStatus());
@@ -93,13 +110,13 @@ public final class ViolationManager {
                     details,
                     bedrock,
                     observation,
-                    EvidenceSnapshot.capture(plugin, player),
-                    isEnforcementEnabled()
+                    evidence,
+                    enforcementEnabled
             );
         }
 
         double kickLevel = plugin.getConfig().getDouble("checks." + normalizedCheck + ".kick-vl", -1.0);
-        if (isEnforcementEnabled()
+        if (enforcementEnabled
                 && plugin.getConfig().getBoolean("actions.kick.enabled", true)
                 && kickLevel > 0.0
                 && previousLevel < kickLevel
