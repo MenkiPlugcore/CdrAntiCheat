@@ -1,4 +1,4 @@
-# CdrAntiCheat v0.3.x
+# CdrAntiCheat v0.3.1
 # Conservative defaults are intentional. Tune after reviewing real server evidence.
 
 alerts:
@@ -8,12 +8,59 @@ alerts:
   in-game-mode: fallback
   log-to-file: true
   cooldown-ms: 1000
+  # WATCH is silent by default. Staff/Discord starts receiving alerts at ABNORMAL.
+  minimum-observation-status: ABNORMAL
+  # Global per-player observation alert cooldown. Status changes bypass this cooldown.
+  observation-cooldown-ms: 5000
 
 integrations:
   discordsrv:
     enabled: true
     # Leave blank to use DiscordSRV's main text channel.
     channel-id: ''
+
+observation:
+  enabled: true
+  # observe: collect evidence, calculate confidence, warn staff, never kick/setback.
+  # enforce: allow configured kick/setback actions after thresholds are crossed.
+  enforcement-mode: observe
+
+  # Impossible non-finite movement may still be cancelled in observe mode as a protocol/server safety guard.
+  safety-cancel-impossible-movement: true
+
+  max-score: 100.0
+  correlation-window-ms: 15000
+  same-check-repeat-window-ms: 2500
+  # Repeated noise from one check contributes less than independent correlated signals.
+  same-check-repeat-multiplier: 0.40
+  correlation-bonus: 4.0
+  default-weight: 8.0
+
+  # Confidence score decays after a quiet period so a normal player can return to NORMAL naturally.
+  decay-grace-seconds: 10
+  score-decay-per-second: 1.25
+  session-timeout-seconds: 60
+
+  thresholds:
+    watch: 12.0
+    abnormal: 35.0
+    suspicious: 60.0
+    high-risk: 85.0
+
+  # Stronger/impossible signals carry more evidence weight. Combat correlation remains conservative.
+  weights:
+    bad-movement-a: 18.0
+    speed-a: 8.0
+    fly-a: 10.0
+    reach-a: 12.0
+    autoclicker-a: 8.0
+    timer-a: 12.0
+    bad-packets-a: 18.0
+    packet-rate-a: 5.0
+    aim-a: 10.0
+    multitarget-a: 14.0
+    attack-timing-a: 10.0
+    killaura-a: 20.0
 
 compatibility:
   floodgate-detection: true
@@ -156,7 +203,6 @@ checks:
     alert-vl: 2.0
     kick-vl: -1.0
 
-  # v0.3 combat checks are alert-only by default until real Vephilim PvP calibration is complete.
   aim-a:
     enabled: true
     alert-vl: 2.0
@@ -178,6 +224,7 @@ checks:
     kick-vl: -1.0
 
 actions:
+  # This switch is only honored when observation.enforcement-mode is enforce.
   kick:
     enabled: true
     message: 'Unusual client behavior was detected. Please reconnect without prohibited modifications.'
