@@ -10,12 +10,15 @@ import store.cadera.cdranticheat.check.player.AutoClickerListener;
 import store.cadera.cdranticheat.command.AntiCheatCommand;
 import store.cadera.cdranticheat.compat.BedrockDetector;
 import store.cadera.cdranticheat.core.ViolationManager;
+import store.cadera.cdranticheat.packet.PacketEngine;
+import store.cadera.cdranticheat.packet.PacketEngineFactory;
 
 public final class CdrAntiCheat extends JavaPlugin {
 
     private AlertService alertService;
     private BedrockDetector bedrockDetector;
     private ViolationManager violationManager;
+    private PacketEngine packetEngine;
 
     @Override
     public void onEnable() {
@@ -25,6 +28,9 @@ public final class CdrAntiCheat extends JavaPlugin {
         alertService = new AlertService(this);
         violationManager = new ViolationManager(this, alertService, bedrockDetector);
         violationManager.start();
+
+        packetEngine = PacketEngineFactory.create(this, violationManager);
+        boolean packetEngineStarted = packetEngine.start();
 
         PluginManager pluginManager = getServer().getPluginManager();
         pluginManager.registerEvents(new MovementListener(this, violationManager), this);
@@ -40,7 +46,14 @@ public final class CdrAntiCheat extends JavaPlugin {
         command.setTabCompleter(antiCheatCommand);
 
         getLogger().info("CdrAntiCheat " + getDescription().getVersion() + " enabled.");
-        getLogger().info("Initial checks: bad-movement-a, speed-a, fly-a, reach-a, autoclicker-a");
+        getLogger().info("Checks: bad-movement-a, speed-a, fly-a, reach-a, autoclicker-a, timer-a, bad-packets-a");
+        if (packetEngineStarted) {
+            getLogger().info("Packet engine active via " + packetEngine.providerName() + ".");
+        } else {
+            getLogger().warning("Packet engine is unavailable (" + packetEngine.providerName()
+                    + "). Event-level checks remain active, but packet checks are disabled.");
+        }
+
         if (alertService.isDiscordAvailable()) {
             getLogger().info("DiscordSRV detected. Violation alerts can be delivered to Discord.");
         } else {
@@ -50,6 +63,9 @@ public final class CdrAntiCheat extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (packetEngine != null) {
+            packetEngine.stop();
+        }
         if (violationManager != null) {
             violationManager.shutdown();
         }
@@ -68,5 +84,9 @@ public final class CdrAntiCheat extends JavaPlugin {
 
     public ViolationManager getViolationManager() {
         return violationManager;
+    }
+
+    public PacketEngine getPacketEngine() {
+        return packetEngine;
     }
 }
