@@ -156,29 +156,26 @@ checks:
     alert-vl: 2.0
     kick-vl: -1.0
 
-  # Repeated high-angle snaps ending almost exactly on target center.
+  # v0.3 combat checks are alert-only by default until real Vephilim PvP calibration is complete.
   aim-a:
     enabled: true
     alert-vl: 2.0
-    kick-vl: 10.0
+    kick-vl: -1.0
 
-  # Rapid attacks across three or more distinct targets inside the correlation window.
   multitarget-a:
     enabled: true
     alert-vl: 2.0
-    kick-vl: 10.0
+    kick-vl: -1.0
 
-  # Very low-variance attack cadence over a sufficiently long sample.
   attack-timing-a:
     enabled: true
     alert-vl: 2.0
-    kick-vl: 10.0
+    kick-vl: -1.0
 
-  # Multi-signal correlation of aim, switching, multi-target and timing evidence.
   killaura-a:
     enabled: true
     alert-vl: 2.0
-    kick-vl: 12.0
+    kick-vl: -1.0
 
 actions:
   kick:
