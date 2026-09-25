@@ -2,7 +2,7 @@
 
 CdrAntiCheat is a modular, packet-aware anti-cheat project for Paper servers by CADERA.
 
-> Current development line: **v0.3.x Combat Correlation Engine**
+> Current development line: **v0.3.1 Confidence & Observation Layer**
 
 ## Target
 
@@ -11,13 +11,36 @@ CdrAntiCheat is a modular, packet-aware anti-cheat project for Paper servers by 
 - Standalone Paper server architecture
 - PacketEvents 2.14.0 for packet-level checks and telemetry
 - Java clients with conservative Geyser/Floodgate compatibility rules
-- Optional DiscordSRV alert delivery
+- Optional DiscordSRV observation alert delivery
 
 ## Design goals
 
 CdrAntiCheat is designed around low false-positive detection, evidence-based violations, modular checks, configurable punishments, and auditable staff alerts.
 
-Detection is intentionally separated from punishment. Suspicious behavior accumulates violation levels, decays over time, and only reaches alerts, setbacks, or kicks after configured evidence thresholds.
+Detection is intentionally separated from punishment. In the default `observe` profile, checks continue collecting evidence but do not kick or setback players. Player state is classified through a confidence layer instead of treating one flag as proof of cheating.
+
+## Observation statuses
+
+The observation engine uses five internal states:
+
+- `NORMAL`
+- `WATCH`
+- `ABNORMAL`
+- `SUSPICIOUS`
+- `HIGH RISK`
+
+`WATCH` is silent by default. Staff/Discord alerts begin at `ABNORMAL` unless `alerts.minimum-observation-status` is changed.
+
+Repeated evidence from the same check inside a short window is intentionally discounted. Independent checks inside the correlation window receive additional evidence weight. Observation confidence decays after quiet periods so legitimate players naturally return toward `NORMAL`.
+
+Default action mode:
+
+```yaml
+observation:
+  enforcement-mode: observe
+```
+
+`observe` collects evidence and warns staff without enabling kick/setback actions. `enforce` enables the configured punishment thresholds.
 
 ## Current checks
 
@@ -27,7 +50,7 @@ Detection is intentionally separated from punishment. Suspicious behavior accumu
 - `fly-a`
 - `bad-movement-a`
 - `reach-a`
-  - v0.3 correlates accepted damage with the recent attack packet target and PacketEvents RTT/jitter telemetry before evaluating reach
+  - correlates accepted damage with the recent attack packet target and PacketEvents RTT/jitter telemetry
 - `autoclicker-a`
 
 ### Packet & timing engine
@@ -39,7 +62,7 @@ Detection is intentionally separated from punishment. Suspicious behavior accumu
   - validates non-finite movement/rotation data and impossible pitch values at packet level
 - `packet-rate-a`
   - generic inbound packet-rate evidence channel
-  - **disabled by default** until a real server baseline is collected
+  - disabled by default until a real server baseline is collected
 
 ### Combat correlation engine
 
@@ -71,6 +94,35 @@ The packet engine records reusable telemetry for combat and future movement chec
 - last server velocity vector
 - packet-check evidence buffers
 
+## Evidence context
+
+When an observation alert is emitted, CdrAntiCheat snapshots the incident context at that moment:
+
+- timestamp
+- world name
+- X/Y/Z coordinates
+- yaw/pitch
+- Java/Bedrock platform
+- Bukkit ping
+- PacketEvents keepalive RTT/jitter when available
+- server TPS
+- current check and VL
+- observation status and confidence
+- recent flag count and distinct correlated checks
+- check-specific evidence details
+
+Combat evidence also includes target identity and distance where available.
+
+These fields are written to `plugins/CdrAntiCheat/logs/violations.log` and included in DiscordSRV observation alerts.
+
+## DiscordSRV behavior
+
+DiscordSRV remains an optional soft dependency.
+
+When enabled, CdrAntiCheat sends rich plain-text observation reports to the configured Discord channel. Set `integrations.discordsrv.channel-id` to a channel ID, or leave it blank to use DiscordSRV's main text channel.
+
+If Discord delivery is unavailable and `alerts.in-game-mode` is `fallback`, the alert is sent to OPs/staff with `cdranticheat.alerts` instead.
+
 ## Combat safety gates
 
 Combat correlation checks are intentionally conservative. By default they require:
@@ -82,7 +134,7 @@ Combat correlation checks are intentionally conservative. By default they requir
 - no very recent server velocity grace
 - repeated evidence buffers before a violation is added
 
-The default v0.3 profile also limits advanced combat correlation to player targets while production calibration is still in progress.
+The default profile also limits advanced combat correlation to player targets while production calibration is still in progress.
 
 ## PacketEvents behavior
 
@@ -91,8 +143,6 @@ Packet-level features use PacketEvents as a provided dependency.
 When PacketEvents is installed and enabled, CdrAntiCheat starts its packet engine and enables packet telemetry/checks.
 
 When PacketEvents is missing or cannot be linked safely, CdrAntiCheat falls back to a no-op packet engine. Event-level checks can still start, while packet and combat-correlation checks remain unavailable.
-
-This fallback is intentional so an optional integration failure does not take the entire anti-cheat or Paper server down.
 
 ## Bedrock / Geyser policy
 
@@ -104,9 +154,12 @@ Packet cadence and rotation behavior from Floodgate/Geyser clients are not assum
 - `/cdrac reload`
 - `/cdrac alerts`
 - `/cdrac violations <player>`
+- `/cdrac inspect <player>`
 - `/cdrac packet <player>`
 
-`/cdrac packet <player>` shows packet and combat telemetry including attack timing statistics, target switching, rotation delta, latency, velocity, and grace state. It is intended for development, calibration, and staff diagnostics.
+`/cdrac inspect <player>` shows the current observation status, confidence, score, recent flag count, distinct correlated checks, last signal, and whether the server is in observe or enforce mode.
+
+`/cdrac packet <player>` shows packet and combat telemetry including attack timing statistics, target switching, rotation delta, latency, velocity, and grace state.
 
 Permission root: `cdranticheat.admin`
 
@@ -121,8 +174,9 @@ For the full packet/combat engine:
 1. Run Paper 1.21.11 on Java 21.
 2. Install PacketEvents 2.14.0 in the server `plugins` directory.
 3. Install the CdrAntiCheat jar.
-4. Start the server and confirm `/cdrac status` reports an active PacketEvents engine and available combat correlation.
-5. Use `/cdrac packet <player>` during legitimate PvP before tightening combat thresholds.
+4. Start the server and confirm `/cdrac status` reports an active PacketEvents engine and `OBSERVE (tracking only)` mode.
+5. If DiscordSRV is installed, set `integrations.discordsrv.channel-id` or leave it blank to use the main DiscordSRV text channel.
+6. Use `/cdrac inspect <player>` and `/cdrac packet <player>` during legitimate gameplay before considering `enforce` mode.
 
 DiscordSRV and Floodgate remain optional integrations.
 
@@ -136,7 +190,7 @@ The resulting jar is written to `target/CdrAntiCheat-<version>.jar`.
 
 ## Calibration note
 
-`v0.3.0-SNAPSHOT` is development software. A successful compile does not replace live server calibration. Before aggressive punishments are enabled, collect legitimate Vephilim traffic across normal PvP, high ping, lag spikes, teleportation, custom skills, knockback/velocity sources, high-CPS clicking, Geyser/Floodgate, and unusual target-switch scenarios.
+`v0.3.1-SNAPSHOT` is development software. A successful compile does not replace live server calibration. Keep the default `observe` mode while collecting legitimate Vephilim traffic across normal PvP, high ping, lag spikes, teleportation, custom skills, knockback/velocity sources, high-CPS clicking, Geyser/Floodgate, and unusual target-switch scenarios.
 
 ## Roadmap
 
