@@ -38,7 +38,9 @@ The roadmap is intentionally incremental. Anti-cheat systems become unreliable w
 - [ ] transaction-confirmation timeline for checks that require acknowledgement correlation
 - [ ] production calibration from legitimate Vephilim traffic
 
-## v0.3.x - Combat Correlation Engine
+## v0.3.x - Combat Correlation & Observation
+
+### v0.3.0 Combat Correlation Engine
 
 - [x] packet attack + target entity correlation
 - [x] reach correlation improvements using packet RTT/jitter and target match
@@ -52,9 +54,31 @@ The roadmap is intentionally incremental. Anti-cheat systems become unreliable w
 - [x] TPS / RTT / jitter combat safety gates
 - [x] `killaura-a` multi-signal evidence score
 - [x] extended staff combat telemetry in `/cdrac packet <player>`
+
+### v0.3.1 Confidence & Observation Layer
+
+- [x] `NORMAL` / `WATCH` / `ABNORMAL` / `SUSPICIOUS` / `HIGH RISK` statuses
+- [x] confidence scoring above raw VL
+- [x] per-check evidence weights
+- [x] same-check repeat discounting
+- [x] independent-check correlation bonus
+- [x] confidence decay after quiet periods
+- [x] default tracking-only `observe` mode
+- [x] enforcement hard gate for kick and fly setback
+- [x] minimum alert status and observation alert cooldown
+- [x] `/cdrac inspect <player>`
+- [x] timestamp + world + XYZ + yaw/pitch evidence snapshot
+- [x] ping + RTT + jitter + TPS evidence snapshot
+- [x] combat target + distance context
+- [x] rich DiscordSRV observation reports
+- [x] file logs enriched with incident context
+
+### Remaining v0.3.x
+
 - [ ] hitbox ray tracing
 - [ ] critical-hit validation
 - [ ] deeper line-of-sight / occlusion correlation
+- [ ] recent evidence history / per-player evidence sessions
 - [ ] production calibration and threshold tuning from legitimate Vephilim PvP
 
 ## v0.4.x - Movement Simulation
@@ -82,8 +106,8 @@ The roadmap is intentionally incremental. Anti-cheat systems become unreliable w
 ## v0.6.x - Evidence & Staff Tools
 
 - verbose staff mode
-- player inspection GUI or command view
-- evidence snapshots
+- player inspection GUI
+- persistent/recent evidence snapshots
 - recent flags history
 - per-check statistics
 - false-positive tuning metrics
