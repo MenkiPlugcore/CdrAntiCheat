@@ -2,6 +2,30 @@
 
 All notable changes to CdrAntiCheat are documented here.
 
+## [0.3.3-SNAPSHOT] - 2026-09-25
+
+### Added
+
+- Runtime MENKIESTES license integrity gate.
+- Bundled `LICENSE.txt` resource that is provisioned into `plugins/CdrAntiCheat/LICENSE.txt` when the v0.3.3 license system is initialized for the first time.
+- Hidden `.license-state` marker containing the expected SHA-256 license digest.
+- Startup validation that prevents CdrAntiCheat from initializing checks, PacketEvents, commands, evidence, and Discord integrations when the runtime license is missing or modified.
+- Periodic runtime license integrity monitoring. Removing or modifying `LICENSE.txt` while the server is running causes CdrAntiCheat to disable itself.
+- `/cdrac status` license state reporting.
+- `/cdrac testdiscord` end-to-end DiscordSRV diagnostics without generating a player violation.
+- Discord diagnostics now report actionable failure reasons such as disabled integration, missing/disabled DiscordSRV, missing configured channel, unavailable main channel, or bridge/JDA reflection failure.
+
+### Changed
+
+- Discord message delivery now uses a shared diagnostic delivery path so production observation alerts and test messages exercise the same DiscordSRV/JDA bridge.
+- Plugin startup now validates the runtime license before any anti-cheat subsystem starts.
+
+### Notes
+
+- The runtime license mechanism is an integrity gate, not remote DRM or a customer license-key service.
+- Restoring the exact bundled `LICENSE.txt` allows a server with an existing `.license-state` marker to start again.
+- `MESSAGE QUEUED` from `/cdrac testdiscord` confirms that CdrAntiCheat successfully reached the selected DiscordSRV/JDA message action and queued it for delivery.
+
 ## [0.3.2-SNAPSHOT] - 2026-09-25
 
 ### Added
