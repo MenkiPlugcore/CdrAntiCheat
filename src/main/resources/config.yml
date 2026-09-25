@@ -1,0 +1,72 @@
+# CdrAntiCheat v0.1.x
+# Conservative defaults are intentional. Tune after reviewing real server evidence.
+
+alerts:
+  # always: send in-game staff alerts even when Discord delivery succeeds
+  # fallback: only send in-game alerts when Discord delivery is unavailable
+  # off: never send in-game alerts
+  in-game-mode: fallback
+  log-to-file: true
+
+integrations:
+  discordsrv:
+    enabled: true
+    # Leave blank to use DiscordSRV's main text channel.
+    channel-id: ''
+
+compatibility:
+  floodgate-detection: true
+  bedrock-threshold-multiplier: 1.75
+  # Checks listed here are skipped for Floodgate players until Bedrock-specific
+  # models are implemented.
+  bedrock-skip-checks:
+    - reach-a
+    - autoclicker-a
+
+violations:
+  decay-per-second: 0.20
+  decay-grace-seconds: 8
+  offline-retention-seconds: 900
+
+checks:
+  bad-movement-a:
+    enabled: true
+    alert-vl: 1.0
+    kick-vl: 3.0
+
+  speed-a:
+    enabled: true
+    max-horizontal-per-tick: 0.78
+    required-buffer: 3
+    alert-vl: 2.0
+    kick-vl: 12.0
+
+  fly-a:
+    enabled: true
+    max-air-events: 26
+    required-hover-buffer: 6
+    hover-vertical-absolute-max: 0.025
+    setback-vl: 5.0
+    alert-vl: 2.0
+    kick-vl: 12.0
+
+  reach-a:
+    enabled: true
+    base-max-distance: 3.75
+    max-ping-compensation-ms: 200
+    compensation-per-ms: 0.0015
+    alert-vl: 2.0
+    kick-vl: 10.0
+
+  autoclicker-a:
+    enabled: true
+    max-cps: 24
+    required-buffer: 4
+    sample-interval-ms: 250
+    alert-vl: 2.0
+    kick-vl: 10.0
+
+actions:
+  kick:
+    enabled: true
+    message: 'Unusual client behavior was detected. Please reconnect without prohibited modifications.'
