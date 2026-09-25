@@ -7,6 +7,7 @@ import store.cadera.cdranticheat.CdrAntiCheat;
 import store.cadera.cdranticheat.alert.AlertService;
 import store.cadera.cdranticheat.compat.BedrockDetector;
 import store.cadera.cdranticheat.observation.EvidenceSessionManager;
+import store.cadera.cdranticheat.observation.EvidenceSessionSnapshot;
 import store.cadera.cdranticheat.observation.EvidenceSnapshot;
 import store.cadera.cdranticheat.observation.ObservationManager;
 import store.cadera.cdranticheat.observation.ObservationSnapshot;
@@ -86,7 +87,7 @@ public final class ViolationManager {
         EvidenceSnapshot evidence = EvidenceSnapshot.capture(plugin, player);
         boolean enforcementEnabled = isEnforcementEnabled();
 
-        evidenceSessionManager.record(
+        EvidenceSessionSnapshot evidenceSession = evidenceSessionManager.record(
                 player,
                 normalizedCheck,
                 currentLevel,
@@ -96,6 +97,7 @@ public final class ViolationManager {
                 evidence,
                 enforcementEnabled
         );
+        String evidenceSessionId = evidenceSession == null ? "none" : evidenceSession.sessionId();
 
         double alertLevel = plugin.getConfig().getDouble("checks." + normalizedCheck + ".alert-vl", 1.0);
         boolean observationVisible = observation.status().atLeast(observationManager.minimumAlertStatus());
@@ -111,6 +113,7 @@ public final class ViolationManager {
                     bedrock,
                     observation,
                     evidence,
+                    evidenceSessionId,
                     enforcementEnabled
             );
         }
