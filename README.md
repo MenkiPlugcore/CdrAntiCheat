@@ -2,7 +2,7 @@
 
 CdrAntiCheat is a modular, packet-aware anti-cheat project for Paper servers by CADERA.
 
-> Current development line: **v0.3.1 Confidence & Observation Layer**
+> Current development line: **v0.3.2 Evidence Session & Staff Tracking**
 
 ## Target
 
@@ -15,7 +15,7 @@ CdrAntiCheat is a modular, packet-aware anti-cheat project for Paper servers by 
 
 ## Design goals
 
-CdrAntiCheat is designed around low false-positive detection, evidence-based violations, modular checks, configurable punishments, and auditable staff alerts.
+CdrAntiCheat is designed around low false-positive detection, evidence-based violations, modular checks, configurable punishments, and auditable staff tooling.
 
 Detection is intentionally separated from punishment. In the default `observe` profile, checks continue collecting evidence but do not kick or setback players. Player state is classified through a confidence layer instead of treating one flag as proof of cheating.
 
@@ -41,6 +41,48 @@ observation:
 ```
 
 `observe` collects evidence and warns staff without enabling kick/setback actions. `enforce` enables the configured punishment thresholds.
+
+## Evidence sessions
+
+v0.3.2 records every accepted flag into a bounded per-player evidence history, including evidence that remains at silent `WATCH` status and never reaches Discord.
+
+A quiet gap automatically starts a new evidence session. Each session tracks:
+
+- unique session ID
+- start and last-update time
+- total evidence count
+- distinct checks involved
+- peak observation status
+- peak confidence
+- last check
+- last incident location
+- retained chronological evidence records
+
+Each evidence record contains:
+
+- timestamp
+- check and current VL
+- observation status, score, and confidence
+- world and X/Y/Z
+- yaw/pitch
+- Java/Bedrock platform
+- Bukkit ping
+- PacketEvents RTT/jitter when available
+- server TPS
+- enforcement/tracking mode
+- check-specific detail such as combat target, distance, timing, rotation, or movement measurement when available
+
+Runtime history is intentionally bounded by `evidence.max-sessions-per-player`, `evidence.max-records-per-session`, and `evidence.runtime-retention-minutes`.
+
+Runtime history powers staff commands and can include recently tracked players after they disconnect. Runtime history is not reloaded after a full server restart.
+
+For persistent review, every accepted evidence item can also be appended to daily files under:
+
+```text
+plugins/CdrAntiCheat/evidence/evidence-YYYY-MM-DD.log
+```
+
+The evidence log is separate from `logs/violations.log`: the daily evidence log records silent tracking evidence too, while the violation log follows the staff/Discord alert pipeline.
 
 ## Current checks
 
@@ -94,32 +136,13 @@ The packet engine records reusable telemetry for combat and future movement chec
 - last server velocity vector
 - packet-check evidence buffers
 
-## Evidence context
-
-When an observation alert is emitted, CdrAntiCheat snapshots the incident context at that moment:
-
-- timestamp
-- world name
-- X/Y/Z coordinates
-- yaw/pitch
-- Java/Bedrock platform
-- Bukkit ping
-- PacketEvents keepalive RTT/jitter when available
-- server TPS
-- current check and VL
-- observation status and confidence
-- recent flag count and distinct correlated checks
-- check-specific evidence details
-
-Combat evidence also includes target identity and distance where available.
-
-These fields are written to `plugins/CdrAntiCheat/logs/violations.log` and included in DiscordSRV observation alerts.
-
 ## DiscordSRV behavior
 
 DiscordSRV remains an optional soft dependency.
 
-When enabled, CdrAntiCheat sends rich plain-text observation reports to the configured Discord channel. Set `integrations.discordsrv.channel-id` to a channel ID, or leave it blank to use DiscordSRV's main text channel.
+When enabled, CdrAntiCheat sends observation reports containing status, confidence, timestamp, check/VL, world, XYZ, rotation, platform, network state, TPS, correlated signal counts, evidence detail, and action mode.
+
+Set `integrations.discordsrv.channel-id` to a channel ID, or leave it blank to use DiscordSRV's main text channel.
 
 If Discord delivery is unavailable and `alerts.in-game-mode` is `fallback`, the alert is sent to OPs/staff with `cdranticheat.alerts` instead.
 
@@ -155,11 +178,14 @@ Packet cadence and rotation behavior from Floodgate/Geyser clients are not assum
 - `/cdrac alerts`
 - `/cdrac violations <player>`
 - `/cdrac inspect <player>`
+- `/cdrac evidence <player> [page]`
 - `/cdrac packet <player>`
 
-`/cdrac inspect <player>` shows the current observation status, confidence, score, recent flag count, distinct correlated checks, last signal, and whether the server is in observe or enforce mode.
+`/cdrac inspect <player>` shows current observation state plus the latest evidence-session summary, including session ID, evidence count, distinct checks, peak status/confidence, and last incident location.
 
-`/cdrac packet <player>` shows packet and combat telemetry including attack timing statistics, target switching, rotation delta, latency, velocity, and grace state.
+`/cdrac evidence <player> [page]` shows paginated recent evidence with session ID, time, status/confidence, check/VL, world/coordinates, platform, action mode, and check-specific details. Recently tracked offline players remain inspectable while runtime history is retained.
+
+`/cdrac packet <player>` requires the player to be online and shows live packet/combat telemetry including attack timing statistics, target switching, rotation delta, latency, velocity, and grace state.
 
 Permission root: `cdranticheat.admin`
 
@@ -174,9 +200,9 @@ For the full packet/combat engine:
 1. Run Paper 1.21.11 on Java 21.
 2. Install PacketEvents 2.14.0 in the server `plugins` directory.
 3. Install the CdrAntiCheat jar.
-4. Start the server and confirm `/cdrac status` reports an active PacketEvents engine and `OBSERVE (tracking only)` mode.
+4. Start the server and confirm `/cdrac status` reports an active PacketEvents engine, enabled evidence sessions, and `OBSERVE (tracking only)` mode.
 5. If DiscordSRV is installed, set `integrations.discordsrv.channel-id` or leave it blank to use the main DiscordSRV text channel.
-6. Use `/cdrac inspect <player>` and `/cdrac packet <player>` during legitimate gameplay before considering `enforce` mode.
+6. Use `/cdrac inspect <player>`, `/cdrac evidence <player>`, and `/cdrac packet <player>` during legitimate gameplay before considering `enforce` mode.
 
 DiscordSRV and Floodgate remain optional integrations.
 
@@ -190,7 +216,7 @@ The resulting jar is written to `target/CdrAntiCheat-<version>.jar`.
 
 ## Calibration note
 
-`v0.3.1-SNAPSHOT` is development software. A successful compile does not replace live server calibration. Keep the default `observe` mode while collecting legitimate Vephilim traffic across normal PvP, high ping, lag spikes, teleportation, custom skills, knockback/velocity sources, high-CPS clicking, Geyser/Floodgate, and unusual target-switch scenarios.
+`v0.3.2-SNAPSHOT` is development software. A successful compile does not replace live server calibration. Keep the default `observe` mode while collecting legitimate Vephilim traffic across normal PvP, high ping, lag spikes, teleportation, custom skills, knockback/velocity sources, high-CPS clicking, Geyser/Floodgate, and unusual target-switch scenarios.
 
 ## Roadmap
 
