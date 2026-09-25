@@ -11,6 +11,7 @@ import store.cadera.cdranticheat.check.player.AutoClickerListener;
 import store.cadera.cdranticheat.command.AntiCheatCommand;
 import store.cadera.cdranticheat.compat.BedrockDetector;
 import store.cadera.cdranticheat.core.ViolationManager;
+import store.cadera.cdranticheat.observation.EvidenceSessionManager;
 import store.cadera.cdranticheat.observation.ObservationManager;
 import store.cadera.cdranticheat.packet.PacketEngine;
 import store.cadera.cdranticheat.packet.PacketEngineFactory;
@@ -20,6 +21,7 @@ public final class CdrAntiCheat extends JavaPlugin {
     private AlertService alertService;
     private BedrockDetector bedrockDetector;
     private ObservationManager observationManager;
+    private EvidenceSessionManager evidenceSessionManager;
     private ViolationManager violationManager;
     private PacketEngine packetEngine;
 
@@ -31,7 +33,15 @@ public final class CdrAntiCheat extends JavaPlugin {
         alertService = new AlertService(this);
         observationManager = new ObservationManager(this);
         observationManager.start();
-        violationManager = new ViolationManager(this, alertService, bedrockDetector, observationManager);
+        evidenceSessionManager = new EvidenceSessionManager(this);
+        evidenceSessionManager.start();
+        violationManager = new ViolationManager(
+                this,
+                alertService,
+                bedrockDetector,
+                observationManager,
+                evidenceSessionManager
+        );
         violationManager.start();
 
         packetEngine = PacketEngineFactory.create(this, violationManager);
@@ -54,6 +64,8 @@ public final class CdrAntiCheat extends JavaPlugin {
         getLogger().info("CdrAntiCheat " + getDescription().getVersion() + " enabled.");
         getLogger().info("Checks: bad-movement-a, speed-a, fly-a, reach-a, autoclicker-a, timer-a, bad-packets-a, aim-a, multitarget-a, attack-timing-a, killaura-a");
         getLogger().info("Observation engine: " + (violationManager.isEnforcementEnabled() ? "ENFORCE" : "OBSERVE") + " mode.");
+        getLogger().info("Evidence sessions: "
+                + (getConfig().getBoolean("evidence.enabled", true) ? "enabled" : "disabled") + ".");
         if (packetEngineStarted) {
             getLogger().info("Packet engine active via " + packetEngine.providerName() + ".");
         } else {
@@ -79,6 +91,9 @@ public final class CdrAntiCheat extends JavaPlugin {
         if (observationManager != null) {
             observationManager.shutdown();
         }
+        if (evidenceSessionManager != null) {
+            evidenceSessionManager.close();
+        }
         if (alertService != null) {
             alertService.close();
         }
@@ -94,6 +109,10 @@ public final class CdrAntiCheat extends JavaPlugin {
 
     public ObservationManager getObservationManager() {
         return observationManager;
+    }
+
+    public EvidenceSessionManager getEvidenceSessionManager() {
+        return evidenceSessionManager;
     }
 
     public ViolationManager getViolationManager() {
