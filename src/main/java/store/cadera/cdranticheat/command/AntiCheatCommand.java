@@ -58,6 +58,10 @@ public final class AntiCheatCommand implements TabExecutor {
                 + (plugin.getPacketEngine().isAvailable()
                 ? ChatColor.GREEN + plugin.getPacketEngine().providerName()
                 : ChatColor.YELLOW + plugin.getPacketEngine().providerName()));
+        sender.sendMessage(ChatColor.GRAY + "Combat correlation: "
+                + (plugin.getPacketEngine().isAvailable()
+                ? ChatColor.GREEN + "available"
+                : ChatColor.YELLOW + "disabled (packet engine unavailable)"));
         sender.sendMessage(ChatColor.GRAY + "DiscordSRV: "
                 + (plugin.getAlertService().isDiscordAvailable() ? ChatColor.GREEN + "available" : ChatColor.YELLOW + "fallback mode"));
         sender.sendMessage(ChatColor.GRAY + "Floodgate API: "
@@ -67,7 +71,7 @@ public final class AntiCheatCommand implements TabExecutor {
     private void reload(CommandSender sender) {
         plugin.reloadConfig();
         plugin.getPacketEngine().reload();
-        sender.sendMessage(ChatColor.GREEN + "CdrAntiCheat config dan packet engine berhasil direload.");
+        sender.sendMessage(ChatColor.GREEN + "CdrAntiCheat config, packet engine, dan combat profile berhasil direload.");
     }
 
     private void toggleAlerts(CommandSender sender) {
@@ -126,7 +130,7 @@ public final class AntiCheatCommand implements TabExecutor {
         }
 
         sender.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.RED + "CdrAC" + ChatColor.DARK_GRAY + "] "
-                + ChatColor.YELLOW + target.getName() + ChatColor.GRAY + " packet telemetry:");
+                + ChatColor.YELLOW + target.getName() + ChatColor.GRAY + " packet/combat telemetry:");
         sender.sendMessage(ChatColor.GRAY + "Inbound: " + ChatColor.WHITE
                 + format(snapshot.inboundPacketsPerSecond()) + " pps"
                 + ChatColor.DARK_GRAY + " | " + ChatColor.GRAY + "Movement: " + ChatColor.WHITE
@@ -139,6 +143,19 @@ public final class AntiCheatCommand implements TabExecutor {
                 + "yaw=" + format(snapshot.yaw()) + " pitch=" + format(snapshot.pitch())
                 + ChatColor.DARK_GRAY + " | " + ChatColor.GRAY + "delta=" + ChatColor.WHITE
                 + format(snapshot.deltaYaw()) + "/" + format(snapshot.deltaPitch()));
+        sender.sendMessage(ChatColor.GRAY + "Attack: " + ChatColor.WHITE
+                + "target=" + snapshot.lastTargetEntityId()
+                + " age=" + millis(snapshot.lastAttackAgoMillis())
+                + " interval=" + millis(snapshot.lastAttackIntervalMillis()));
+        sender.sendMessage(ChatColor.GRAY + "Attack timing: " + ChatColor.WHITE
+                + "samples=" + snapshot.attackSamples()
+                + " mean=" + format(snapshot.attackIntervalMeanMillis()) + "ms"
+                + " std=" + format(snapshot.attackIntervalStdDevMillis()) + "ms");
+        sender.sendMessage(ChatColor.GRAY + "Target correlation: " + ChatColor.WHITE
+                + "distinct=" + snapshot.recentDistinctTargets()
+                + " switch=" + millis(snapshot.targetSwitchIntervalMillis())
+                + " switchAge=" + millis(snapshot.lastTargetSwitchAgoMillis())
+                + " rotDelta=" + format(snapshot.attackRotationDeltaDegrees()) + "deg");
         sender.sendMessage(ChatColor.GRAY + "Buffers: " + ChatColor.WHITE
                 + "timer=" + snapshot.timerBuffer()
                 + " badPacket=" + snapshot.badPacketBuffer()
@@ -147,8 +164,8 @@ public final class AntiCheatCommand implements TabExecutor {
                 + format(snapshot.velocityX()) + ", " + format(snapshot.velocityY()) + ", " + format(snapshot.velocityZ())
                 + ChatColor.DARK_GRAY + " | " + ChatColor.GRAY + "last=" + ChatColor.WHITE
                 + millis(snapshot.lastVelocityAgoMillis()));
-        sender.sendMessage(ChatColor.GRAY + "Last attack: " + ChatColor.WHITE
-                + millis(snapshot.lastAttackAgoMillis())
+        sender.sendMessage(ChatColor.GRAY + "Grace: " + ChatColor.WHITE
+                + "teleport=" + millis(snapshot.teleportGraceRemainingMillis())
                 + ChatColor.DARK_GRAY + " | " + ChatColor.GRAY + "tracked=" + ChatColor.WHITE
                 + snapshot.trackedForMillis() + "ms");
     }
