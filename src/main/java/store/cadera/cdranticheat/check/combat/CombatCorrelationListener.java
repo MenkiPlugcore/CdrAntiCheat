@@ -99,6 +99,8 @@ public final class CombatCorrelationListener implements Listener {
 
         CombatState state = states.computeIfAbsent(attacker.getUniqueId(), ignored -> new CombatState());
         double aimError = aimErrorDegrees(attacker, target, packet.yaw(), packet.pitch());
+        double targetDistance = closestDistance(attacker, target);
+        String targetName = target instanceof Player targetPlayer ? targetPlayer.getName() : target.getType().name();
 
         boolean aimSuspicious = evaluateAim(packet, aimError);
         boolean multiTargetSuspicious = evaluateMultiTarget(packet);
@@ -110,7 +112,7 @@ public final class CombatCorrelationListener implements Listener {
         if (state.updateAim(aimSuspicious, aimRequired)
                 && violations.isCheckEnabled("aim-a")) {
             violations.flag(attacker, "aim-a", 1.0,
-                    details(packet, aimError, tps, "snap-lock"));
+                    details(packet, aimError, tps, targetName, targetDistance, "snap-lock"));
         }
 
         int multiRequired = Math.max(1,
@@ -118,7 +120,7 @@ public final class CombatCorrelationListener implements Listener {
         if (state.updateMultiTarget(multiTargetSuspicious, multiRequired)
                 && violations.isCheckEnabled("multitarget-a")) {
             violations.flag(attacker, "multitarget-a", 1.0,
-                    details(packet, aimError, tps, "rapid-target-chain"));
+                    details(packet, aimError, tps, targetName, targetDistance, "rapid-target-chain"));
         }
 
         int timingRequired = Math.max(2,
@@ -126,7 +128,7 @@ public final class CombatCorrelationListener implements Listener {
         if (state.updateTiming(timingSuspicious, timingRequired)
                 && violations.isCheckEnabled("attack-timing-a")) {
             violations.flag(attacker, "attack-timing-a", 1.0,
-                    details(packet, aimError, tps, "low-variance-attack-cadence"));
+                    details(packet, aimError, tps, targetName, targetDistance, "low-variance-attack-cadence"));
         }
 
         int auraScore = 0;
@@ -157,7 +159,7 @@ public final class CombatCorrelationListener implements Listener {
         if (state.updateKillAura(auraSuspicious, auraRequiredBuffer)
                 && violations.isCheckEnabled("killaura-a")) {
             violations.flag(attacker, "killaura-a", 1.0,
-                    details(packet, aimError, tps, "score=" + auraScore));
+                    details(packet, aimError, tps, targetName, targetDistance, "score=" + auraScore));
         }
     }
 
@@ -229,10 +231,17 @@ public final class CombatCorrelationListener implements Listener {
                 && packet.attackRotationDeltaDegrees() >= minRotation;
     }
 
-    private String details(PacketSnapshot packet, double aimError, double tps, String reason) {
+    private String details(PacketSnapshot packet,
+                           double aimError,
+                           double tps,
+                           String target,
+                           double targetDistance,
+                           String reason) {
         return String.format(Locale.US,
-                "%s aimErr=%.3f rotDelta=%.2f targets=%d switch=%dms switchAge=%dms attack=%dms mean=%.2f std=%.2f samples=%d rtt=%d jitter=%d tps=%.2f",
+                "%s target=%s distance=%.3f aimErr=%.3f rotDelta=%.2f targets=%d switch=%dms switchAge=%dms attack=%dms mean=%.2f std=%.2f samples=%d rtt=%d jitter=%d tps=%.2f",
                 reason,
+                target,
+                targetDistance,
                 aimError,
                 packet.attackRotationDeltaDegrees(),
                 packet.recentDistinctTargets(),
@@ -245,6 +254,15 @@ public final class CombatCorrelationListener implements Listener {
                 packet.keepAliveRttMillis(),
                 packet.keepAliveJitterMillis(),
                 tps);
+    }
+
+    private double closestDistance(Player attacker, LivingEntity target) {
+        Vector eye = attacker.getEyeLocation().toVector();
+        BoundingBox box = target.getBoundingBox();
+        double closestX = clamp(eye.getX(), box.getMinX(), box.getMaxX());
+        double closestY = clamp(eye.getY(), box.getMinY(), box.getMaxY());
+        double closestZ = clamp(eye.getZ(), box.getMinZ(), box.getMaxZ());
+        return eye.distance(new Vector(closestX, closestY, closestZ));
     }
 
     private double aimErrorDegrees(Player attacker, LivingEntity target, float yaw, float pitch) {
