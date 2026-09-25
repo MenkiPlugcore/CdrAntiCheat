@@ -11,6 +11,7 @@ import store.cadera.cdranticheat.check.player.AutoClickerListener;
 import store.cadera.cdranticheat.command.AntiCheatCommand;
 import store.cadera.cdranticheat.compat.BedrockDetector;
 import store.cadera.cdranticheat.core.ViolationManager;
+import store.cadera.cdranticheat.observation.ObservationManager;
 import store.cadera.cdranticheat.packet.PacketEngine;
 import store.cadera.cdranticheat.packet.PacketEngineFactory;
 
@@ -18,6 +19,7 @@ public final class CdrAntiCheat extends JavaPlugin {
 
     private AlertService alertService;
     private BedrockDetector bedrockDetector;
+    private ObservationManager observationManager;
     private ViolationManager violationManager;
     private PacketEngine packetEngine;
 
@@ -27,7 +29,9 @@ public final class CdrAntiCheat extends JavaPlugin {
 
         bedrockDetector = new BedrockDetector(this);
         alertService = new AlertService(this);
-        violationManager = new ViolationManager(this, alertService, bedrockDetector);
+        observationManager = new ObservationManager(this);
+        observationManager.start();
+        violationManager = new ViolationManager(this, alertService, bedrockDetector, observationManager);
         violationManager.start();
 
         packetEngine = PacketEngineFactory.create(this, violationManager);
@@ -49,6 +53,7 @@ public final class CdrAntiCheat extends JavaPlugin {
 
         getLogger().info("CdrAntiCheat " + getDescription().getVersion() + " enabled.");
         getLogger().info("Checks: bad-movement-a, speed-a, fly-a, reach-a, autoclicker-a, timer-a, bad-packets-a, aim-a, multitarget-a, attack-timing-a, killaura-a");
+        getLogger().info("Observation engine: " + (violationManager.isEnforcementEnabled() ? "ENFORCE" : "OBSERVE") + " mode.");
         if (packetEngineStarted) {
             getLogger().info("Packet engine active via " + packetEngine.providerName() + ".");
         } else {
@@ -57,7 +62,7 @@ public final class CdrAntiCheat extends JavaPlugin {
         }
 
         if (alertService.isDiscordAvailable()) {
-            getLogger().info("DiscordSRV detected. Violation alerts can be delivered to Discord.");
+            getLogger().info("DiscordSRV detected. Observation alerts can be delivered to Discord.");
         } else {
             getLogger().info("DiscordSRV unavailable. Staff alerts use configured fallback behavior.");
         }
@@ -71,6 +76,9 @@ public final class CdrAntiCheat extends JavaPlugin {
         if (violationManager != null) {
             violationManager.shutdown();
         }
+        if (observationManager != null) {
+            observationManager.shutdown();
+        }
         if (alertService != null) {
             alertService.close();
         }
@@ -82,6 +90,10 @@ public final class CdrAntiCheat extends JavaPlugin {
 
     public BedrockDetector getBedrockDetector() {
         return bedrockDetector;
+    }
+
+    public ObservationManager getObservationManager() {
+        return observationManager;
     }
 
     public ViolationManager getViolationManager() {
