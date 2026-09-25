@@ -86,6 +86,17 @@ The roadmap is intentionally incremental. Anti-cheat systems become unreliable w
 - [x] `/cdrac evidence <player> [page]` paginated history
 - [x] configurable runtime retention, session count, record count, and page size
 
+### v0.3.3 Integration & License Diagnostics
+
+- [x] bundled MENKIESTES runtime `LICENSE.txt`
+- [x] first-run runtime license provisioning for the v0.3.3 license subsystem
+- [x] SHA-256 runtime license integrity validation
+- [x] startup hard gate before anti-cheat subsystems initialize
+- [x] periodic runtime integrity monitor with self-disable on missing/modified license
+- [x] `/cdrac status` license state
+- [x] `/cdrac testdiscord` end-to-end DiscordSRV/JDA message test
+- [x] actionable Discord diagnostic failure reasons
+
 ### Remaining v0.3.x
 
 - [ ] hitbox ray tracing
