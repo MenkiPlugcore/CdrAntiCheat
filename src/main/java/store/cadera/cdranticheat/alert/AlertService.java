@@ -107,6 +107,27 @@ public final class AlertService implements AutoCloseable {
         }
     }
 
+    public DiscordTestResult testDiscord() {
+        String enforcement = plugin.getViolationManager().isEnforcementEnabled() ? "ENFORCE" : "OBSERVE";
+        String packet = plugin.getPacketEngine().isAvailable()
+                ? plugin.getPacketEngine().providerName()
+                : "UNAVAILABLE";
+        String floodgate = plugin.getBedrockDetector().isAvailable() ? "DETECTED" : "NOT DETECTED";
+        String license = plugin.getLicenseManager().isValid() ? "VALID" : plugin.getLicenseManager().status().name();
+
+        String message = "**CdrAntiCheat Integration Test**\n"
+                + "**Result:** `MESSAGE QUEUED`\n"
+                + "**Version:** `" + escapeDiscord(plugin.getDescription().getVersion()) + "`\n"
+                + "**Mode:** `" + enforcement + "`\n"
+                + "**License:** `" + license + "`\n"
+                + "**Packet engine:** `" + escapeDiscord(packet) + "`\n"
+                + "**Floodgate:** `" + floodgate + "`\n"
+                + "**Source:** `/cdrac testdiscord`\n"
+                + "This is a diagnostics message. No player was flagged.";
+
+        return deliverDiscord(message);
+    }
+
     private String buildDiscordMessage(Player player,
                                        String checkId,
                                        double violationLevel,
@@ -199,51 +220,66 @@ public final class AlertService implements AutoCloseable {
     }
 
     private boolean sendDiscord(String message) {
+        return deliverDiscord(message).success();
+    }
+
+    private DiscordTestResult deliverDiscord(String message) {
         if (!plugin.getConfig().getBoolean("integrations.discordsrv.enabled", true)) {
-            return false;
+            return DiscordTestResult.failure("integrations.discordsrv.enabled is false");
         }
 
         Plugin discordSrv = Bukkit.getPluginManager().getPlugin("DiscordSRV");
-        if (discordSrv == null || !discordSrv.isEnabled()) {
-            return false;
+        if (discordSrv == null) {
+            return DiscordTestResult.failure("DiscordSRV plugin is not installed");
+        }
+        if (!discordSrv.isEnabled()) {
+            return DiscordTestResult.failure("DiscordSRV plugin is installed but not enabled");
         }
 
         try {
             Class<?> discordSrvClass = Class.forName("github.scarsz.discordsrv.DiscordSRV");
             Object discordSrvInstance = discordSrvClass.getMethod("getPlugin").invoke(null);
             if (discordSrvInstance == null) {
-                return false;
+                return DiscordTestResult.failure("DiscordSRV instance is unavailable");
             }
 
             String channelId = plugin.getConfig().getString("integrations.discordsrv.channel-id", "");
             Object channel;
+            String destination;
 
             if (channelId != null && !channelId.isBlank()) {
                 Object jda = discordSrvInstance.getClass().getMethod("getJda").invoke(discordSrvInstance);
                 if (jda == null) {
-                    return false;
+                    return DiscordTestResult.failure("DiscordSRV JDA instance is unavailable");
                 }
                 Method getTextChannelById = jda.getClass().getMethod("getTextChannelById", String.class);
                 channel = getTextChannelById.invoke(jda, channelId.trim());
+                destination = "configured channel " + channelId.trim();
+                if (channel == null) {
+                    return DiscordTestResult.failure("configured Discord channel was not found: " + channelId.trim());
+                }
             } else {
                 channel = discordSrvInstance.getClass().getMethod("getMainTextChannel").invoke(discordSrvInstance);
-            }
-
-            if (channel == null) {
-                return false;
+                destination = "DiscordSRV main text channel";
+                if (channel == null) {
+                    return DiscordTestResult.failure("DiscordSRV main text channel is unavailable");
+                }
             }
 
             Method sendMessage = channel.getClass().getMethod("sendMessage", CharSequence.class);
             Object action = sendMessage.invoke(channel, message);
             if (action == null) {
-                return false;
+                return DiscordTestResult.failure("DiscordSRV/JDA did not return a message action");
             }
 
             action.getClass().getMethod("queue").invoke(action);
-            return true;
+            return DiscordTestResult.success("message queued to " + destination);
         } catch (ReflectiveOperationException | LinkageError exception) {
             plugin.getLogger().fine("DiscordSRV alert delivery unavailable: " + exception.getMessage());
-            return false;
+            return DiscordTestResult.failure(
+                    "DiscordSRV/JDA bridge error: " + exception.getClass().getSimpleName()
+                            + (exception.getMessage() == null ? "" : " (" + exception.getMessage() + ")")
+            );
         }
     }
 
