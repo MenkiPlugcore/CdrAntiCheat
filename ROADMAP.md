@@ -73,12 +73,24 @@ The roadmap is intentionally incremental. Anti-cheat systems become unreliable w
 - [x] rich DiscordSRV observation reports
 - [x] file logs enriched with incident context
 
+### v0.3.2 Evidence Session & Staff Tracking
+
+- [x] per-player evidence sessions with automatic quiet-gap rotation
+- [x] bounded recent evidence records in RAM
+- [x] session peak status/confidence tracking
+- [x] session evidence and distinct-check counters
+- [x] last incident world/XYZ retained in session summary
+- [x] persistent daily evidence log including silent `WATCH` flags
+- [x] recently disconnected player lookup while runtime history is retained
+- [x] `/cdrac inspect <player>` latest-session summary
+- [x] `/cdrac evidence <player> [page]` paginated history
+- [x] configurable runtime retention, session count, record count, and page size
+
 ### Remaining v0.3.x
 
 - [ ] hitbox ray tracing
 - [ ] critical-hit validation
 - [ ] deeper line-of-sight / occlusion correlation
-- [ ] recent evidence history / per-player evidence sessions
 - [ ] production calibration and threshold tuning from legitimate Vephilim PvP
 
 ## v0.4.x - Movement Simulation
@@ -107,8 +119,7 @@ The roadmap is intentionally incremental. Anti-cheat systems become unreliable w
 
 - verbose staff mode
 - player inspection GUI
-- persistent/recent evidence snapshots
-- recent flags history
+- cross-restart evidence browser/index
 - per-check statistics
 - false-positive tuning metrics
 - exportable diagnostics
