@@ -52,15 +52,18 @@ public final class AlertService implements AutoCloseable {
                       boolean bedrock,
                       ObservationSnapshot observation,
                       EvidenceSnapshot evidence,
+                      String sessionId,
                       boolean enforcementEnabled) {
         String safeDetails = sanitize(details);
+        String safeSession = sessionId == null || sessionId.isBlank() ? "none" : sanitize(sessionId);
         String platform = bedrock ? "BEDROCK" : "JAVA";
         String action = enforcementEnabled ? "ENFORCEMENT ENABLED" : "TRACKING ONLY";
 
         String plain = String.format(
                 Locale.US,
-                "[CdrAntiCheat] %s | status=%s confidence=%.1f%% check=%s VL=%.2f world=%s x=%.1f y=%.1f z=%.1f yaw=%.1f pitch=%.1f ping=%d rtt=%d jitter=%d tps=%.2f platform=%s action=%s evidence=%s",
+                "[CdrAntiCheat] %s | session=%s status=%s confidence=%.1f%% check=%s VL=%.2f world=%s x=%.1f y=%.1f z=%.1f yaw=%.1f pitch=%.1f ping=%d rtt=%d jitter=%d tps=%.2f platform=%s action=%s evidence=%s",
                 player.getName(),
+                safeSession,
                 observation.status().displayName(),
                 observation.confidence(),
                 checkId,
@@ -92,6 +95,7 @@ public final class AlertService implements AutoCloseable {
                 platform,
                 observation,
                 evidence,
+                safeSession,
                 action
         ));
 
@@ -99,7 +103,7 @@ public final class AlertService implements AutoCloseable {
         mode = mode == null ? "fallback" : mode.toLowerCase(Locale.ROOT);
 
         if ("always".equals(mode) || ("fallback".equals(mode) && !discordDelivered)) {
-            broadcastStaff(player, checkId, violationLevel, platform, observation, evidence, action);
+            broadcastStaff(player, checkId, violationLevel, platform, observation, evidence, safeSession, action);
         }
     }
 
@@ -110,12 +114,14 @@ public final class AlertService implements AutoCloseable {
                                        String platform,
                                        ObservationSnapshot observation,
                                        EvidenceSnapshot evidence,
+                                       String sessionId,
                                        String action) {
         String occurred = LOG_TIME.format(Instant.ofEpochMilli(evidence.capturedAtMillis()));
         return String.format(
                 Locale.US,
                 "**CdrAntiCheat Observation**\n"
                         + "**Player:** %s\n"
+                        + "**Session:** `%s`\n"
                         + "**Occurred:** `%s`\n"
                         + "**Status:** %s\n"
                         + "**Confidence:** %.1f%%\n"
@@ -130,6 +136,7 @@ public final class AlertService implements AutoCloseable {
                         + "**Evidence:** %s\n"
                         + "**Action:** %s",
                 escapeDiscord(player.getName()),
+                escapeDiscord(sessionId),
                 occurred,
                 observation.status().displayName(),
                 observation.confidence(),
@@ -159,6 +166,7 @@ public final class AlertService implements AutoCloseable {
                                 String platform,
                                 ObservationSnapshot observation,
                                 EvidenceSnapshot evidence,
+                                String sessionId,
                                 String action) {
         String message = ChatColor.DARK_GRAY + "[" + ChatColor.RED + "CdrAC" + ChatColor.DARK_GRAY + "] "
                 + statusColor(observation.status().name()) + observation.status().displayName() + ChatColor.GRAY + " "
@@ -166,6 +174,7 @@ public final class AlertService implements AutoCloseable {
                 + ChatColor.GRAY + " " + String.format(Locale.US, "%.0f%%", observation.confidence())
                 + ChatColor.DARK_GRAY + " | " + ChatColor.RED + checkId
                 + ChatColor.GRAY + " VL=" + ChatColor.WHITE + String.format(Locale.US, "%.2f", violationLevel)
+                + ChatColor.DARK_GRAY + " | " + ChatColor.GRAY + sessionId
                 + ChatColor.DARK_GRAY + " | " + ChatColor.GRAY + evidence.world()
                 + ChatColor.WHITE + String.format(Locale.US, " %.1f %.1f %.1f", evidence.x(), evidence.y(), evidence.z())
                 + ChatColor.DARK_GRAY + " [" + platform + "] "
