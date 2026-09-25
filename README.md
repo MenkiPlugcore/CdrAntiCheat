@@ -2,7 +2,7 @@
 
 CdrAntiCheat is a modular, packet-aware anti-cheat project for Paper servers by CADERA.
 
-> Current development line: **v0.3.2 Evidence Session & Staff Tracking**
+> Current development line: **v0.3.3 Integration & License Diagnostics**
 
 ## Target
 
@@ -15,7 +15,7 @@ CdrAntiCheat is a modular, packet-aware anti-cheat project for Paper servers by 
 
 ## Design goals
 
-CdrAntiCheat is designed around low false-positive detection, evidence-based violations, modular checks, configurable punishments, and auditable staff tooling.
+CdrAntiCheat is designed around low false-positive detection, evidence-based violations, modular checks, configurable punishments, auditable staff tooling, and explicit runtime integrity checks.
 
 Detection is intentionally separated from punishment. In the default `observe` profile, checks continue collecting evidence but do not kick or setback players. Player state is classified through a confidence layer instead of treating one flag as proof of cheating.
 
@@ -44,7 +44,7 @@ observation:
 
 ## Evidence sessions
 
-v0.3.2 records every accepted flag into a bounded per-player evidence history, including evidence that remains at silent `WATCH` status and never reaches Discord.
+v0.3.2+ records every accepted flag into a bounded per-player evidence history, including evidence that remains at silent `WATCH` status and never reaches Discord.
 
 A quiet gap automatically starts a new evidence session. Each session tracks:
 
@@ -83,6 +83,25 @@ plugins/CdrAntiCheat/evidence/evidence-YYYY-MM-DD.log
 ```
 
 The evidence log is separate from `logs/violations.log`: the daily evidence log records silent tracking evidence too, while the violation log follows the staff/Discord alert pipeline.
+
+## Runtime license integrity
+
+v0.3.3 adds a local runtime integrity gate for the MENKIESTES SOFTWARE LICENSE v1.0.
+
+The plugin JAR contains a bundled `LICENSE.txt`. When the v0.3.3 license subsystem is initialized for the first time, CdrAntiCheat creates:
+
+```text
+plugins/CdrAntiCheat/LICENSE.txt
+plugins/CdrAntiCheat/.license-state
+```
+
+The runtime `LICENSE.txt` must match the bundled license SHA-256 digest. The hidden `.license-state` marker records the expected digest after the first successful provisioning.
+
+On later startups, CdrAntiCheat validates the license before initializing PacketEvents, listeners, commands, evidence tracking, or Discord integrations. A missing or modified runtime license causes the plugin to disable itself.
+
+A periodic runtime check also verifies license integrity while the server is online. Removing or modifying `LICENSE.txt` after startup causes CdrAntiCheat to self-disable when the next integrity check runs.
+
+This mechanism is an integrity gate, not remote DRM and not a customer license-key service. Restore the exact bundled `LICENSE.txt` to recover an installation whose runtime license was removed or modified.
 
 ## Current checks
 
@@ -140,11 +159,19 @@ The packet engine records reusable telemetry for combat and future movement chec
 
 DiscordSRV remains an optional soft dependency.
 
-When enabled, CdrAntiCheat sends observation reports containing status, confidence, timestamp, check/VL, world, XYZ, rotation, platform, network state, TPS, correlated signal counts, evidence detail, and action mode.
+When enabled, CdrAntiCheat sends observation reports containing status, confidence, timestamp, check/VL, world, XYZ, rotation, platform, network state, TPS, correlated signal counts, evidence detail, session ID, and action mode.
 
 Set `integrations.discordsrv.channel-id` to a channel ID, or leave it blank to use DiscordSRV's main text channel.
 
 If Discord delivery is unavailable and `alerts.in-game-mode` is `fallback`, the alert is sent to OPs/staff with `cdranticheat.alerts` instead.
+
+Use:
+
+```text
+/cdrac testdiscord
+```
+
+to send a diagnostics-only message through the same DiscordSRV/JDA delivery bridge used by observation alerts. The command does not generate a fake player violation. It returns an actionable failure reason when delivery cannot be queued.
 
 ## Combat safety gates
 
@@ -176,10 +203,15 @@ Packet cadence and rotation behavior from Floodgate/Geyser clients are not assum
 - `/cdrac status`
 - `/cdrac reload`
 - `/cdrac alerts`
+- `/cdrac testdiscord`
 - `/cdrac violations <player>`
 - `/cdrac inspect <player>`
 - `/cdrac evidence <player> [page]`
 - `/cdrac packet <player>`
+
+`/cdrac status` shows runtime license state, observe/enforce mode, evidence availability, packet engine, combat correlation, DiscordSRV, and Floodgate status.
+
+`/cdrac testdiscord` queues a diagnostics-only message through the configured DiscordSRV destination and reports the exact failure class when it cannot do so.
 
 `/cdrac inspect <player>` shows current observation state plus the latest evidence-session summary, including session ID, evidence count, distinct checks, peak status/confidence, and last incident location.
 
@@ -200,9 +232,11 @@ For the full packet/combat engine:
 1. Run Paper 1.21.11 on Java 21.
 2. Install PacketEvents 2.14.0 in the server `plugins` directory.
 3. Install the CdrAntiCheat jar.
-4. Start the server and confirm `/cdrac status` reports an active PacketEvents engine, enabled evidence sessions, and `OBSERVE (tracking only)` mode.
-5. If DiscordSRV is installed, set `integrations.discordsrv.channel-id` or leave it blank to use the main DiscordSRV text channel.
-6. Use `/cdrac inspect <player>`, `/cdrac evidence <player>`, and `/cdrac packet <player>` during legitimate gameplay before considering `enforce` mode.
+4. Start the server. v0.3.3 provisions and validates `plugins/CdrAntiCheat/LICENSE.txt` before the anti-cheat engine starts.
+5. Confirm `/cdrac status` reports `License: VALID`, an active PacketEvents engine, enabled evidence sessions, and `OBSERVE (tracking only)` mode.
+6. If DiscordSRV is installed, set `integrations.discordsrv.channel-id` or leave it blank to use the main DiscordSRV text channel.
+7. Run `/cdrac testdiscord` and confirm the diagnostics message arrives in Discord.
+8. Use `/cdrac inspect <player>`, `/cdrac evidence <player>`, and `/cdrac packet <player>` during legitimate gameplay before considering `enforce` mode.
 
 DiscordSRV and Floodgate remain optional integrations.
 
@@ -216,7 +250,7 @@ The resulting jar is written to `target/CdrAntiCheat-<version>.jar`.
 
 ## Calibration note
 
-`v0.3.2-SNAPSHOT` is development software. A successful compile does not replace live server calibration. Keep the default `observe` mode while collecting legitimate Vephilim traffic across normal PvP, high ping, lag spikes, teleportation, custom skills, knockback/velocity sources, high-CPS clicking, Geyser/Floodgate, and unusual target-switch scenarios.
+`v0.3.3-SNAPSHOT` is development software. A successful compile does not replace live server calibration. Keep the default `observe` mode while collecting legitimate Vephilim traffic across normal PvP, high ping, lag spikes, teleportation, custom skills, knockback/velocity sources, high-CPS clicking, Geyser/Floodgate, and unusual target-switch scenarios.
 
 ## Roadmap
 
