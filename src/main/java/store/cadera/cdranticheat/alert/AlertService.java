@@ -5,6 +5,8 @@ import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import store.cadera.cdranticheat.CdrAntiCheat;
+import store.cadera.cdranticheat.observation.EvidenceSnapshot;
+import store.cadera.cdranticheat.observation.ObservationSnapshot;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
@@ -43,35 +45,128 @@ public final class AlertService implements AutoCloseable {
         });
     }
 
-    public void alert(Player player, String checkId, double violationLevel, String details, boolean bedrock) {
+    public void alert(Player player,
+                      String checkId,
+                      double violationLevel,
+                      String details,
+                      boolean bedrock,
+                      ObservationSnapshot observation,
+                      EvidenceSnapshot evidence,
+                      boolean enforcementEnabled) {
         String safeDetails = sanitize(details);
         String platform = bedrock ? "BEDROCK" : "JAVA";
+        String action = enforcementEnabled ? "ENFORCEMENT ENABLED" : "TRACKING ONLY";
+
         String plain = String.format(
                 Locale.US,
-                "[CdrAntiCheat] %s failed %s | VL %.2f | %s | %s",
-                player.getName(), checkId, violationLevel, safeDetails, platform
+                "[CdrAntiCheat] %s | status=%s confidence=%.1f%% check=%s VL=%.2f world=%s x=%.1f y=%.1f z=%.1f yaw=%.1f pitch=%.1f ping=%d rtt=%d jitter=%d tps=%.2f platform=%s action=%s evidence=%s",
+                player.getName(),
+                observation.status().displayName(),
+                observation.confidence(),
+                checkId,
+                violationLevel,
+                evidence.world(),
+                evidence.x(),
+                evidence.y(),
+                evidence.z(),
+                evidence.yaw(),
+                evidence.pitch(),
+                evidence.pingMillis(),
+                evidence.keepAliveRttMillis(),
+                evidence.keepAliveJitterMillis(),
+                evidence.tps(),
+                platform,
+                action,
+                safeDetails
         );
 
         if (plugin.getConfig().getBoolean("alerts.log-to-file", true)) {
             writeFileLog(plain);
         }
 
-        boolean discordDelivered = sendDiscord(plain);
+        boolean discordDelivered = sendDiscord(buildDiscordMessage(
+                player,
+                checkId,
+                violationLevel,
+                safeDetails,
+                platform,
+                observation,
+                evidence,
+                action
+        ));
+
         String mode = plugin.getConfig().getString("alerts.in-game-mode", "fallback");
         mode = mode == null ? "fallback" : mode.toLowerCase(Locale.ROOT);
 
         if ("always".equals(mode) || ("fallback".equals(mode) && !discordDelivered)) {
-            broadcastStaff(player, checkId, violationLevel, safeDetails, platform);
+            broadcastStaff(player, checkId, violationLevel, platform, observation, evidence, action);
         }
     }
 
-    private void broadcastStaff(Player flagged, String checkId, double violationLevel, String details, String platform) {
+    private String buildDiscordMessage(Player player,
+                                       String checkId,
+                                       double violationLevel,
+                                       String details,
+                                       String platform,
+                                       ObservationSnapshot observation,
+                                       EvidenceSnapshot evidence,
+                                       String action) {
+        return String.format(
+                Locale.US,
+                "**CdrAntiCheat Observation**\n"
+                        + "**Player:** %s\n"
+                        + "**Status:** %s\n"
+                        + "**Confidence:** %.1f%%\n"
+                        + "**Check:** `%s` | VL %.2f\n"
+                        + "**World:** `%s`\n"
+                        + "**Location:** `X %.1f | Y %.1f | Z %.1f`\n"
+                        + "**Rotation:** `Yaw %.1f | Pitch %.1f`\n"
+                        + "**Platform:** %s\n"
+                        + "**Network:** `Ping %dms | RTT %s | Jitter %s`\n"
+                        + "**TPS:** `%.2f`\n"
+                        + "**Signals:** `%d flags | %d checks`\n"
+                        + "**Evidence:** %s\n"
+                        + "**Action:** %s",
+                escapeDiscord(player.getName()),
+                observation.status().displayName(),
+                observation.confidence(),
+                checkId,
+                violationLevel,
+                escapeDiscord(evidence.world()),
+                evidence.x(),
+                evidence.y(),
+                evidence.z(),
+                evidence.yaw(),
+                evidence.pitch(),
+                platform,
+                evidence.pingMillis(),
+                millis(evidence.keepAliveRttMillis()),
+                millis(evidence.keepAliveJitterMillis()),
+                evidence.tps(),
+                observation.recentFlags(),
+                observation.distinctChecks(),
+                escapeDiscord(details),
+                action
+        );
+    }
+
+    private void broadcastStaff(Player flagged,
+                                String checkId,
+                                double violationLevel,
+                                String platform,
+                                ObservationSnapshot observation,
+                                EvidenceSnapshot evidence,
+                                String action) {
         String message = ChatColor.DARK_GRAY + "[" + ChatColor.RED + "CdrAC" + ChatColor.DARK_GRAY + "] "
-                + ChatColor.YELLOW + flagged.getName() + ChatColor.GRAY + " failed "
-                + ChatColor.RED + checkId + ChatColor.GRAY + " VL="
-                + ChatColor.WHITE + String.format(Locale.US, "%.2f", violationLevel)
+                + statusColor(observation.status().name()) + observation.status().displayName() + ChatColor.GRAY + " "
+                + ChatColor.YELLOW + flagged.getName()
+                + ChatColor.GRAY + " " + String.format(Locale.US, "%.0f%%", observation.confidence())
+                + ChatColor.DARK_GRAY + " | " + ChatColor.RED + checkId
+                + ChatColor.GRAY + " VL=" + ChatColor.WHITE + String.format(Locale.US, "%.2f", violationLevel)
+                + ChatColor.DARK_GRAY + " | " + ChatColor.GRAY + evidence.world()
+                + ChatColor.WHITE + String.format(Locale.US, " %.1f %.1f %.1f", evidence.x(), evidence.y(), evidence.z())
                 + ChatColor.DARK_GRAY + " [" + platform + "] "
-                + ChatColor.GRAY + details;
+                + ChatColor.GRAY + action;
 
         for (Player online : Bukkit.getOnlinePlayers()) {
             if ((online.isOp() || online.hasPermission("cdranticheat.alerts"))
@@ -79,6 +174,16 @@ public final class AlertService implements AutoCloseable {
                 online.sendMessage(message);
             }
         }
+    }
+
+    private ChatColor statusColor(String status) {
+        return switch (status) {
+            case "HIGH_RISK" -> ChatColor.DARK_RED;
+            case "SUSPICIOUS" -> ChatColor.RED;
+            case "ABNORMAL" -> ChatColor.GOLD;
+            case "WATCH" -> ChatColor.YELLOW;
+            default -> ChatColor.GRAY;
+        };
     }
 
     private boolean sendDiscord(String message) {
@@ -173,10 +278,21 @@ public final class AlertService implements AutoCloseable {
             return "no-details";
         }
         String sanitized = input.replace('\n', ' ').replace('\r', ' ').trim();
-        if (sanitized.length() > 400) {
-            sanitized = sanitized.substring(0, 400) + "...";
+        if (sanitized.length() > 500) {
+            sanitized = sanitized.substring(0, 500) + "...";
         }
         return sanitized;
+    }
+
+    private String escapeDiscord(String value) {
+        if (value == null) {
+            return "unknown";
+        }
+        return value.replace("`", "'").replace("@", "@​");
+    }
+
+    private String millis(long value) {
+        return value < 0L ? "n/a" : value + "ms";
     }
 
     @Override
