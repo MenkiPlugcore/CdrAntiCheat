@@ -1,4 +1,4 @@
-# CdrAntiCheat v0.1.x
+# CdrAntiCheat v0.2.x
 # Conservative defaults are intentional. Tune after reviewing real server evidence.
 
 alerts:
@@ -7,6 +7,7 @@ alerts:
   # off: never send in-game alerts
   in-game-mode: fallback
   log-to-file: true
+  cooldown-ms: 1000
 
 integrations:
   discordsrv:
@@ -17,16 +18,41 @@ integrations:
 compatibility:
   floodgate-detection: true
   bedrock-threshold-multiplier: 1.75
-  # Checks listed here are skipped for Floodgate players until Bedrock-specific
-  # models are implemented.
+  # Packet cadence from Geyser/Floodgate is not identical to native Java.
+  # Timing-sensitive checks stay skipped until Bedrock baselines are calibrated.
   bedrock-skip-checks:
     - reach-a
     - autoclicker-a
+    - timer-a
+    - packet-rate-a
 
 violations:
   decay-per-second: 0.20
   decay-grace-seconds: 8
   offline-retention-seconds: 900
+
+packet-engine:
+  # Grace after server teleports/setbacks so timing windows do not inherit stale packets.
+  teleport-grace-ms: 1500
+
+  timer:
+    # Vanilla movement cadence is approximately 20 packets/sec.
+    # The default is intentionally loose and requires sustained evidence.
+    window-ms: 3000
+    max-movement-pps: 22.75
+    required-buffer: 6
+    sample-interval-ms: 250
+    startup-grace-ms: 5000
+
+  bad-packets:
+    max-absolute-pitch: 90.01
+    required-buffer: 2
+
+  packet-rate:
+    # Disabled check by default. Telemetry is still collected for /cdrac packet.
+    max-inbound-pps: 250.0
+    required-buffer: 4
+    sample-interval-ms: 1000
 
 checks:
   bad-movement-a:
@@ -65,6 +91,24 @@ checks:
     sample-interval-ms: 250
     alert-vl: 2.0
     kick-vl: 10.0
+
+  # Packet-level timing check. Skipped for Floodgate by default.
+  timer-a:
+    enabled: true
+    alert-vl: 2.0
+    kick-vl: 12.0
+
+  # Rejects impossible/non-finite movement rotation state at packet level.
+  bad-packets-a:
+    enabled: true
+    alert-vl: 1.0
+    kick-vl: 4.0
+
+  # General inbound flood telemetry/check. Keep disabled until server baseline is known.
+  packet-rate-a:
+    enabled: false
+    alert-vl: 2.0
+    kick-vl: -1.0
 
 actions:
   kick:
