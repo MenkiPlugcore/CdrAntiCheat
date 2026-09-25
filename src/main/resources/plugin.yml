@@ -1,0 +1,29 @@
+name: CdrAntiCheat
+version: '${project.version}'
+main: store.cadera.cdranticheat.CdrAntiCheat
+api-version: '1.21'
+author: CADERA
+description: Modular anti-cheat for Paper servers by CADERA.
+website: https://cadera.site
+softdepend:
+  - DiscordSRV
+  - floodgate
+  - Geyser-Spigot
+
+commands:
+  cdrac:
+    description: CdrAntiCheat administration command.
+    usage: /cdrac <status|reload|alerts|violations>
+    aliases: [cdranticheat, anticheat]
+    permission: cdranticheat.admin
+
+permissions:
+  cdranticheat.admin:
+    description: Allows use of CdrAntiCheat administrative commands.
+    default: op
+  cdranticheat.alerts:
+    description: Receives CdrAntiCheat staff alerts.
+    default: op
+  cdranticheat.bypass:
+    description: Bypasses CdrAntiCheat checks.
+    default: false
