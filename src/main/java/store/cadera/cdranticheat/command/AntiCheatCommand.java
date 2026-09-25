@@ -9,6 +9,7 @@ import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import store.cadera.cdranticheat.CdrAntiCheat;
+import store.cadera.cdranticheat.alert.DiscordTestResult;
 import store.cadera.cdranticheat.observation.EvidenceHistorySnapshot;
 import store.cadera.cdranticheat.observation.EvidenceRecord;
 import store.cadera.cdranticheat.observation.EvidenceSessionSnapshot;
@@ -58,6 +59,7 @@ public final class AntiCheatCommand implements TabExecutor {
             case "status" -> sendStatus(sender);
             case "reload" -> reload(sender);
             case "alerts" -> toggleAlerts(sender);
+            case "testdiscord", "discordtest" -> testDiscord(sender);
             case "violations", "vl" -> showViolations(sender, args);
             case "packet", "packets" -> showPacket(sender, args);
             case "inspect", "observe" -> showObservation(sender, args);
@@ -71,6 +73,10 @@ public final class AntiCheatCommand implements TabExecutor {
         sender.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.RED + "CdrAC" + ChatColor.DARK_GRAY + "] "
                 + ChatColor.WHITE + "v" + plugin.getDescription().getVersion());
         sender.sendMessage(ChatColor.GRAY + "Paper target: " + ChatColor.WHITE + "1.21.11 / Java 21");
+        sender.sendMessage(ChatColor.GRAY + "License: "
+                + (plugin.getLicenseManager().isValid()
+                ? ChatColor.GREEN + "VALID"
+                : ChatColor.RED + plugin.getLicenseManager().status().name()));
         sender.sendMessage(ChatColor.GRAY + "Mode: "
                 + (plugin.getViolationManager().isEnforcementEnabled()
                 ? ChatColor.RED + "ENFORCE"
@@ -97,6 +103,20 @@ public final class AntiCheatCommand implements TabExecutor {
         plugin.reloadConfig();
         plugin.getPacketEngine().reload();
         sender.sendMessage(ChatColor.GREEN + "CdrAntiCheat config, packet engine, combat profile, observation profile, dan evidence profile berhasil direload.");
+    }
+
+    private void testDiscord(CommandSender sender) {
+        sender.sendMessage(ChatColor.GRAY + "Menjalankan DiscordSRV integration test...");
+        DiscordTestResult result = plugin.getAlertService().testDiscord();
+        if (result.success()) {
+            sender.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.RED + "CdrAC" + ChatColor.DARK_GRAY + "] "
+                    + ChatColor.GREEN + "Discord test SUCCESS"
+                    + ChatColor.GRAY + " - " + result.detail());
+        } else {
+            sender.sendMessage(ChatColor.DARK_GRAY + "[" + ChatColor.RED + "CdrAC" + ChatColor.DARK_GRAY + "] "
+                    + ChatColor.RED + "Discord test FAILED"
+                    + ChatColor.GRAY + " - " + result.detail());
+        }
     }
 
     private void toggleAlerts(CommandSender sender) {
@@ -358,6 +378,7 @@ public final class AntiCheatCommand implements TabExecutor {
         sender.sendMessage(ChatColor.GRAY + "/" + label + " status");
         sender.sendMessage(ChatColor.GRAY + "/" + label + " reload");
         sender.sendMessage(ChatColor.GRAY + "/" + label + " alerts");
+        sender.sendMessage(ChatColor.GRAY + "/" + label + " testdiscord");
         sender.sendMessage(ChatColor.GRAY + "/" + label + " violations <player>");
         sender.sendMessage(ChatColor.GRAY + "/" + label + " inspect <player>");
         sender.sendMessage(ChatColor.GRAY + "/" + label + " evidence <player> [page]");
@@ -370,7 +391,7 @@ public final class AntiCheatCommand implements TabExecutor {
                                                  @NotNull String alias,
                                                  @NotNull String[] args) {
         if (args.length == 1) {
-            return filter(List.of("status", "reload", "alerts", "violations", "inspect", "evidence", "packet"), args[0]);
+            return filter(List.of("status", "reload", "alerts", "testdiscord", "violations", "inspect", "evidence", "packet"), args[0]);
         }
         if (args.length == 2) {
             boolean packetOnly = args[0].equalsIgnoreCase("packet") || args[0].equalsIgnoreCase("packets");
