@@ -12,6 +12,7 @@ import org.bukkit.util.BoundingBox;
 import org.bukkit.util.Vector;
 import store.cadera.cdranticheat.CdrAntiCheat;
 import store.cadera.cdranticheat.core.ViolationManager;
+import store.cadera.cdranticheat.packet.PacketSnapshot;
 
 import java.util.Locale;
 
@@ -46,6 +47,24 @@ public final class CombatListener implements Listener {
             return;
         }
 
+        PacketSnapshot packet = plugin.getPacketEngine().snapshot(player.getUniqueId());
+        long maxPacketAge = Math.max(50L,
+                plugin.getConfig().getLong("checks.reach-a.max-packet-age-ms", 250L));
+        boolean correlated = packet.available()
+                && packet.lastAttackAgoMillis() >= 0L
+                && packet.lastAttackAgoMillis() <= maxPacketAge
+                && packet.lastTargetEntityId() == target.getEntityId();
+
+        if (packet.available()) {
+            if (packet.teleportGraceRemainingMillis() > 0L) {
+                return;
+            }
+            // When the packet engine is active, avoid evaluating a stale or unrelated Bukkit damage event.
+            if (!correlated) {
+                return;
+            }
+        }
+
         BoundingBox box = target.getBoundingBox().expand(0.10);
         Vector eye = player.getEyeLocation().toVector();
         double closestX = clamp(eye.getX(), box.getMinX(), box.getMaxX());
@@ -53,21 +72,41 @@ public final class CombatListener implements Listener {
         double closestZ = clamp(eye.getZ(), box.getMinZ(), box.getMaxZ());
         double distance = eye.distance(new Vector(closestX, closestY, closestZ));
 
-        int ping = Math.max(0, player.getPing());
+        int fallbackPing = Math.max(0, player.getPing());
+        long packetRtt = packet.available() ? packet.keepAliveRttMillis() : -1L;
+        int latency = packetRtt >= 0L
+                ? (int) Math.min(Integer.MAX_VALUE, packetRtt)
+                : fallbackPing;
+
         double base = plugin.getConfig().getDouble("checks.reach-a.base-max-distance", 3.75);
         int maxPingComp = Math.max(0,
                 plugin.getConfig().getInt("checks.reach-a.max-ping-compensation-ms", 200));
         double perMs = Math.max(0.0,
                 plugin.getConfig().getDouble("checks.reach-a.compensation-per-ms", 0.0015));
-        double allowed = base + Math.min(ping, maxPingComp) * perMs;
+
+        int maxJitterComp = Math.max(0,
+                plugin.getConfig().getInt("checks.reach-a.max-jitter-compensation-ms", 80));
+        double jitterPerMs = Math.max(0.0,
+                plugin.getConfig().getDouble("checks.reach-a.jitter-compensation-per-ms", 0.0008));
+        long jitter = packet.available() ? Math.max(0L, packet.keepAliveJitterMillis()) : 0L;
+
+        double allowed = base
+                + Math.min(latency, maxPingComp) * perMs
+                + Math.min(jitter, maxJitterComp) * jitterPerMs;
 
         if (distance > allowed) {
             violations.flag(
                     player,
                     "reach-a",
                     1.0,
-                    String.format(Locale.US, "distance=%.3f max=%.3f ping=%d target=%s",
-                            distance, allowed, ping, target.getType().name())
+                    String.format(Locale.US,
+                            "distance=%.3f max=%.3f latency=%d jitter=%d packetAge=%d target=%s",
+                            distance,
+                            allowed,
+                            latency,
+                            jitter,
+                            packet.available() ? packet.lastAttackAgoMillis() : -1L,
+                            target.getType().name())
             );
         }
     }
