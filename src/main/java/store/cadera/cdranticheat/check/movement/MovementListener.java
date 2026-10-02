@@ -30,8 +30,10 @@ public final class MovementListener implements Listener {
     private final Map<UUID, Long> lastMoveAt = new HashMap<>();
     private final Map<UUID, Long> recentVelocityAt = new HashMap<>();
     private final Map<UUID, Integer> speedBuffer = new HashMap<>();
+    private final Map<UUID, Integer> airSpeedBuffer = new HashMap<>();
     private final Map<UUID, Integer> airEvents = new HashMap<>();
     private final Map<UUID, Integer> hoverBuffer = new HashMap<>();
+    private final Map<UUID, Integer> ascentBuffer = new HashMap<>();
     private final Map<UUID, Location> lastSafe = new HashMap<>();
     private final Map<UUID, Long> lastSetbackAt = new HashMap<>();
 
@@ -63,17 +65,26 @@ public final class MovementListener implements Listener {
         Player player = event.getPlayer();
         Location from = event.getFrom();
         UUID uuid = player.getUniqueId();
+        boolean bedrock = plugin.getBedrockDetector().isBedrock(player);
 
-        if (!isFinite(to) || Math.abs(to.getPitch()) > 90.01F) {
-            violations.flag(player, "bad-movement-a", 1.0,
-                    "non-finite movement or invalid pitch=" + to.getPitch());
-            boolean safetyCancel = plugin.getConfig().getBoolean(
-                    "observation.safety-cancel-impossible-movement", true
-            );
-            if (violations.isEnforcementEnabled() || safetyCancel) {
-                event.setCancelled(true);
-            }
+        if (!isFinitePosition(to)) {
+            flagImpossibleMovement(event, player, "non-finite position");
             return;
+        }
+
+        if (!isFiniteRotation(to) || Math.abs(to.getPitch()) > 90.01F) {
+            Location authoritative = player.getLocation();
+            boolean authoritativeValid = isFiniteRotation(authoritative)
+                    && Math.abs(authoritative.getPitch()) <= 90.01F;
+
+            // Geyser/Floodgate can expose transient raw rotation values that are not the
+            // authoritative Bukkit rotation. Treat this as transport normalization, not
+            // a Bedrock exemption: all actual movement checks remain identical.
+            if (!bedrock || !authoritativeValid) {
+                flagImpossibleMovement(event, player,
+                        "non-finite movement or invalid pitch=" + to.getPitch());
+                return;
+            }
         }
 
         double dx = to.getX() - from.getX();
@@ -86,12 +97,10 @@ public final class MovementListener implements Listener {
         long now = System.currentTimeMillis();
         long previousMove = lastMoveAt.getOrDefault(uuid, now - 50L);
         lastMoveAt.put(uuid, now);
-        double tickFactor = Math.max(1.0, Math.min(5.0, (now - previousMove) / 50.0));
+        double tickFactor = Math.max(1.0, Math.min(4.0, (now - previousMove) / 50.0));
 
         if (isGeneralMovementExempt(player, to, now)) {
-            speedBuffer.put(uuid, 0);
-            airEvents.put(uuid, 0);
-            hoverBuffer.put(uuid, 0);
+            clearActiveBuffers(uuid);
             if (player.isOnGround()) {
                 lastSafe.put(uuid, to.clone());
             }
@@ -102,31 +111,64 @@ public final class MovementListener implements Listener {
         handleFly(player, to, dy, now);
     }
 
+    private void flagImpossibleMovement(PlayerMoveEvent event, Player player, String details) {
+        violations.flag(player, "bad-movement-a", 1.0, details);
+        boolean safetyCancel = plugin.getConfig().getBoolean(
+                "observation.safety-cancel-impossible-movement", true
+        );
+        if (violations.isEnforcementEnabled() || safetyCancel) {
+            event.setCancelled(true);
+        }
+    }
+
     private void handleSpeed(Player player, Location to, double dx, double dz, double tickFactor) {
         UUID uuid = player.getUniqueId();
-        if (!violations.isCheckEnabled("speed-a")) {
-            return;
-        }
-
-        if (!player.isOnGround() || isSpeedSurfaceExempt(to)) {
-            speedBuffer.put(uuid, Math.max(0, speedBuffer.getOrDefault(uuid, 0) - 1));
-            return;
-        }
-
         double horizontal = Math.hypot(dx, dz);
-        double configured = plugin.getConfig().getDouble("checks.speed-a.max-horizontal-per-tick", 0.78);
         double walkScale = Math.max(1.0, player.getWalkSpeed() / 0.2F);
         double potionBonus = speedPotionBonus(player);
-        double maximum = (configured * walkScale + potionBonus) * tickFactor;
 
-        int buffer = speedBuffer.getOrDefault(uuid, 0);
+        if (player.isOnGround()) {
+            airSpeedBuffer.put(uuid, Math.max(0, airSpeedBuffer.getOrDefault(uuid, 0) - 1));
+            if (!violations.isCheckEnabled("speed-a")) {
+                return;
+            }
+            if (isSpeedSurfaceExempt(to)) {
+                speedBuffer.put(uuid, Math.max(0, speedBuffer.getOrDefault(uuid, 0) - 1));
+                return;
+            }
+
+            double configured = plugin.getConfig().getDouble("checks.speed-a.max-horizontal-per-tick", 0.46);
+            double maximum = (configured * walkScale + potionBonus) * tickFactor;
+            updateSpeedBuffer(player, "speed-a", speedBuffer, horizontal, maximum,
+                    Math.max(1, plugin.getConfig().getInt("checks.speed-a.required-buffer", 4)));
+            return;
+        }
+
+        speedBuffer.put(uuid, Math.max(0, speedBuffer.getOrDefault(uuid, 0) - 1));
+        if (!violations.isCheckEnabled("speed-b")) {
+            return;
+        }
+
+        double configured = plugin.getConfig().getDouble("checks.speed-b.max-horizontal-per-tick", 0.62);
+        double maximum = (configured * walkScale + potionBonus) * tickFactor;
+        updateSpeedBuffer(player, "speed-b", airSpeedBuffer, horizontal, maximum,
+                Math.max(1, plugin.getConfig().getInt("checks.speed-b.required-buffer", 5)));
+    }
+
+    private void updateSpeedBuffer(Player player,
+                                   String checkId,
+                                   Map<UUID, Integer> bufferMap,
+                                   double horizontal,
+                                   double maximum,
+                                   int required) {
+        UUID uuid = player.getUniqueId();
+        int buffer = bufferMap.getOrDefault(uuid, 0);
         if (horizontal > maximum) {
             buffer++;
-            int required = Math.max(1, plugin.getConfig().getInt("checks.speed-a.required-buffer", 3));
             if (buffer >= required) {
                 violations.flag(
                         player,
-                        "speed-a",
+                        checkId,
                         1.0,
                         String.format(Locale.US, "horizontal=%.3f max=%.3f ping=%d", horizontal, maximum, player.getPing())
                 );
@@ -135,18 +177,19 @@ public final class MovementListener implements Listener {
         } else {
             buffer = Math.max(0, buffer - 1);
         }
-        speedBuffer.put(uuid, buffer);
+        bufferMap.put(uuid, buffer);
     }
 
     private void handleFly(Player player, Location to, double deltaY, long now) {
         UUID uuid = player.getUniqueId();
-        if (!violations.isCheckEnabled("fly-a")) {
+        if (!violations.isCheckEnabled("fly-a") && !violations.isCheckEnabled("fly-b")) {
             return;
         }
 
         if (player.isOnGround()) {
             airEvents.put(uuid, 0);
             hoverBuffer.put(uuid, 0);
+            ascentBuffer.put(uuid, 0);
             lastSafe.put(uuid, to.clone());
             return;
         }
@@ -154,9 +197,19 @@ public final class MovementListener implements Listener {
         int air = airEvents.getOrDefault(uuid, 0) + 1;
         airEvents.put(uuid, air);
 
-        int maxAir = Math.max(1, plugin.getConfig().getInt("checks.fly-a.max-air-events", 26));
+        if (violations.isCheckEnabled("fly-a")) {
+            handleHover(player, air, deltaY, now);
+        }
+        if (violations.isCheckEnabled("fly-b")) {
+            handleAscent(player, air, deltaY, now);
+        }
+    }
+
+    private void handleHover(Player player, int air, double deltaY, long now) {
+        UUID uuid = player.getUniqueId();
+        int maxAir = Math.max(1, plugin.getConfig().getInt("checks.fly-a.max-air-events", 20));
         double hoverAbsoluteMax = Math.max(0.001,
-                plugin.getConfig().getDouble("checks.fly-a.hover-vertical-absolute-max", 0.025));
+                plugin.getConfig().getDouble("checks.fly-a.hover-vertical-absolute-max", 0.030));
 
         int hover = hoverBuffer.getOrDefault(uuid, 0);
         if (air > maxAir && Math.abs(deltaY) <= hoverAbsoluteMax) {
@@ -166,7 +219,7 @@ public final class MovementListener implements Listener {
         }
 
         int requiredHover = Math.max(1,
-                plugin.getConfig().getInt("checks.fly-a.required-hover-buffer", 6));
+                plugin.getConfig().getInt("checks.fly-a.required-hover-buffer", 5));
         if (hover >= requiredHover) {
             FlagResult result = violations.flag(
                     player,
@@ -175,15 +228,50 @@ public final class MovementListener implements Listener {
                     String.format(Locale.US, "air-events=%d dy=%.4f ping=%d", air, deltaY, player.getPing())
             );
 
-            double setbackLevel = plugin.getConfig().getDouble("checks.fly-a.setback-vl", 5.0);
-            if (violations.isEnforcementEnabled()
-                    && result.accepted()
-                    && result.violationLevel() >= setbackLevel) {
-                attemptSetback(player, now);
-            }
+            maybeSetback(player, result, now, "checks.fly-a.setback-vl", 4.0);
             hover = Math.max(1, requiredHover / 2);
         }
         hoverBuffer.put(uuid, hover);
+    }
+
+    private void handleAscent(Player player, int air, double deltaY, long now) {
+        UUID uuid = player.getUniqueId();
+        int minimumAir = Math.max(1,
+                plugin.getConfig().getInt("checks.fly-b.minimum-air-events", 8));
+        double minimumDelta = Math.max(0.001,
+                plugin.getConfig().getDouble("checks.fly-b.minimum-upward-delta", 0.060));
+        double maximumDelta = Math.max(minimumDelta,
+                plugin.getConfig().getDouble("checks.fly-b.maximum-upward-delta", 0.750));
+        int required = Math.max(1,
+                plugin.getConfig().getInt("checks.fly-b.required-buffer", 4));
+
+        int buffer = ascentBuffer.getOrDefault(uuid, 0);
+        boolean suspicious = air >= minimumAir && deltaY >= minimumDelta && deltaY <= maximumDelta;
+        if (suspicious) {
+            buffer++;
+            if (buffer >= required) {
+                FlagResult result = violations.flag(
+                        player,
+                        "fly-b",
+                        1.0,
+                        String.format(Locale.US, "air-events=%d upward-dy=%.4f ping=%d", air, deltaY, player.getPing())
+                );
+                maybeSetback(player, result, now, "checks.fly-b.setback-vl", 4.0);
+                buffer = Math.max(1, required - 1);
+            }
+        } else {
+            buffer = Math.max(0, buffer - 1);
+        }
+        ascentBuffer.put(uuid, buffer);
+    }
+
+    private void maybeSetback(Player player, FlagResult result, long now, String path, double fallback) {
+        double setbackLevel = plugin.getConfig().getDouble(path, fallback);
+        if (violations.isEnforcementEnabled()
+                && result.accepted()
+                && result.violationLevel() >= setbackLevel) {
+            attemptSetback(player, now);
+        }
     }
 
     private void attemptSetback(Player player, long now) {
@@ -222,12 +310,15 @@ public final class MovementListener implements Listener {
         if (hasEffect(player, PotionEffectType.LEVITATION) || hasEffect(player, PotionEffectType.SLOW_FALLING)) {
             return true;
         }
-        if (isClimbableLike(to.getBlock().getType()) || isClimbableLike(to.clone().subtract(0.0, 1.0, 0.0).getBlock().getType())) {
+        if (isClimbableLike(to.getBlock().getType())
+                || isClimbableLike(to.clone().subtract(0.0, 1.0, 0.0).getBlock().getType())) {
             return true;
         }
 
         long velocityAt = recentVelocityAt.getOrDefault(player.getUniqueId(), 0L);
-        return now - velocityAt < 1500L;
+        long grace = Math.max(250L,
+                plugin.getConfig().getLong("movement-engine.velocity-grace-ms", 1500L));
+        return now - velocityAt < grace;
     }
 
     private boolean isSpeedSurfaceExempt(Location location) {
@@ -263,27 +354,39 @@ public final class MovementListener implements Listener {
         if (effect == null) {
             return 0.0;
         }
-        return (effect.getAmplifier() + 1) * 0.18;
+        return (effect.getAmplifier() + 1) * 0.075;
     }
 
     private boolean hasEffect(Player player, PotionEffectType type) {
         return player.getPotionEffect(type) != null;
     }
 
-    private boolean isFinite(Location location) {
+    private boolean isFinitePosition(Location location) {
         return Double.isFinite(location.getX())
                 && Double.isFinite(location.getY())
-                && Double.isFinite(location.getZ())
-                && Float.isFinite(location.getYaw())
-                && Float.isFinite(location.getPitch());
+                && Double.isFinite(location.getZ());
+    }
+
+    private boolean isFiniteRotation(Location location) {
+        return Float.isFinite(location.getYaw()) && Float.isFinite(location.getPitch());
+    }
+
+    private void clearActiveBuffers(UUID uuid) {
+        speedBuffer.put(uuid, 0);
+        airSpeedBuffer.put(uuid, 0);
+        airEvents.put(uuid, 0);
+        hoverBuffer.put(uuid, 0);
+        ascentBuffer.put(uuid, 0);
     }
 
     private void resetMovementState(Player player) {
         UUID uuid = player.getUniqueId();
         lastMoveAt.remove(uuid);
         speedBuffer.remove(uuid);
+        airSpeedBuffer.remove(uuid);
         airEvents.remove(uuid);
         hoverBuffer.remove(uuid);
+        ascentBuffer.remove(uuid);
         lastSetbackAt.remove(uuid);
         recentVelocityAt.put(uuid, System.currentTimeMillis());
     }
@@ -294,8 +397,10 @@ public final class MovementListener implements Listener {
         lastMoveAt.remove(uuid);
         recentVelocityAt.remove(uuid);
         speedBuffer.remove(uuid);
+        airSpeedBuffer.remove(uuid);
         airEvents.remove(uuid);
         hoverBuffer.remove(uuid);
+        ascentBuffer.remove(uuid);
         lastSafe.remove(uuid);
         lastSetbackAt.remove(uuid);
     }
