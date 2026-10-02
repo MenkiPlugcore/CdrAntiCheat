@@ -1,6 +1,7 @@
 package store.cadera.cdranticheat.core;
 
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitTask;
 import store.cadera.cdranticheat.CdrAntiCheat;
@@ -31,6 +32,8 @@ public final class ViolationManager {
     private final Map<UUID, Map<String, ViolationState>> violations = new HashMap<>();
     private final Map<UUID, Map<String, Long>> lastAlerts = new HashMap<>();
     private final Map<UUID, Long> lastObservationAlerts = new HashMap<>();
+    private final Map<UUID, Map<String, Long>> lastKicks = new HashMap<>();
+    private final Map<UUID, Integer> kickCounts = new HashMap<>();
     private BukkitTask decayTask;
 
     public ViolationManager(CdrAntiCheat plugin,
@@ -59,12 +62,21 @@ public final class ViolationManager {
         }
 
         boolean bedrock = bedrockDetector.isBedrock(player);
-        if (bedrock && isSkippedForBedrock(normalizedCheck)) {
+        boolean equalEnforcement = plugin.getConfig().getBoolean("compatibility.equal-enforcement", true);
+
+        // Raw Geyser/Floodgate rotation can differ from authoritative Bukkit rotation.
+        // This is transport normalization only; movement, speed, fly and interaction checks
+        // still use the same thresholds for Java and Bedrock when equal-enforcement is enabled.
+        if (bedrock && normalizedCheck.equals("bad-packets-a") && isBedrockRotationTransportNoise(details)) {
+            return new FlagResult(false, getViolation(player.getUniqueId(), normalizedCheck), true);
+        }
+
+        if (bedrock && !equalEnforcement && isSkippedForBedrock(normalizedCheck)) {
             return new FlagResult(false, getViolation(player.getUniqueId(), normalizedCheck), true);
         }
 
         double appliedAmount = Math.max(0.0, amount);
-        if (bedrock) {
+        if (bedrock && !equalEnforcement) {
             double multiplier = Math.max(1.0,
                     plugin.getConfig().getDouble("compatibility.bedrock-threshold-multiplier", 1.75));
             appliedAmount /= multiplier;
@@ -76,7 +88,6 @@ public final class ViolationManager {
         );
         ViolationState state = playerStates.computeIfAbsent(normalizedCheck, ignored -> new ViolationState());
 
-        double previousLevel = state.level();
         state.add(appliedAmount, now);
         double currentLevel = state.level();
 
@@ -122,13 +133,15 @@ public final class ViolationManager {
         if (enforcementEnabled
                 && plugin.getConfig().getBoolean("actions.kick.enabled", true)
                 && kickLevel > 0.0
-                && previousLevel < kickLevel
-                && currentLevel >= kickLevel) {
-            String message = plugin.getConfig().getString(
+                && currentLevel >= kickLevel
+                && canKick(player.getUniqueId(), normalizedCheck, now)) {
+            int kickCount = kickCounts.merge(player.getUniqueId(), 1, Integer::sum);
+            String template = plugin.getConfig().getString(
                     "actions.kick.message",
-                    "Unusual client behavior was detected. Please reconnect without prohibited modifications."
+                    "&cCdrAntiCheat\n&7Unusual client behavior detected.\n&fCheck: &c{check}\n&fEvidence: &e{evidence}"
             );
-            player.kickPlayer(message == null ? "Unusual client behavior was detected." : message);
+            String message = formatKickMessage(template, normalizedCheck, evidenceSessionId, currentLevel, kickCount);
+            player.kickPlayer(message);
         }
 
         return new FlagResult(true, currentLevel, bedrock);
@@ -161,6 +174,18 @@ public final class ViolationManager {
         return true;
     }
 
+    private boolean canKick(UUID uuid, String checkId, long now) {
+        long cooldown = Math.max(1000L,
+                plugin.getConfig().getLong("actions.kick.cooldown-ms", 5000L));
+        Map<String, Long> playerKicks = lastKicks.computeIfAbsent(uuid, ignored -> new HashMap<>());
+        long previous = playerKicks.getOrDefault(checkId, 0L);
+        if (now - previous < cooldown) {
+            return false;
+        }
+        playerKicks.put(checkId, now);
+        return true;
+    }
+
     private boolean isSkippedForBedrock(String checkId) {
         List<String> skipped = plugin.getConfig().getStringList("compatibility.bedrock-skip-checks");
         for (String value : skipped) {
@@ -169,6 +194,28 @@ public final class ViolationManager {
             }
         }
         return false;
+    }
+
+    private boolean isBedrockRotationTransportNoise(String details) {
+        if (details == null) {
+            return false;
+        }
+        String normalized = details.toLowerCase(Locale.ROOT);
+        return normalized.startsWith("pitch=") || normalized.contains("non-finite-rotation");
+    }
+
+    private String formatKickMessage(String template,
+                                     String checkId,
+                                     String evidenceId,
+                                     double violationLevel,
+                                     int kickCount) {
+        String safe = template == null ? "Unusual client behavior was detected." : template;
+        safe = safe
+                .replace("{check}", checkId)
+                .replace("{evidence}", evidenceId)
+                .replace("{vl}", String.format(Locale.US, "%.2f", violationLevel))
+                .replace("{count}", Integer.toString(kickCount));
+        return ChatColor.translateAlternateColorCodes('&', safe);
     }
 
     public boolean isCheckEnabled(String checkId) {
@@ -182,6 +229,10 @@ public final class ViolationManager {
         }
         ViolationState state = playerStates.get(checkId.toLowerCase(Locale.ROOT));
         return state == null ? 0.0 : state.level();
+    }
+
+    public int getKickCount(UUID uuid) {
+        return kickCounts.getOrDefault(uuid, 0);
     }
 
     public Map<String, Double> snapshot(UUID uuid) {
@@ -230,6 +281,8 @@ public final class ViolationManager {
                 players.remove();
                 lastAlerts.remove(uuid);
                 lastObservationAlerts.remove(uuid);
+                lastKicks.remove(uuid);
+                kickCounts.remove(uuid);
             }
         }
     }
@@ -242,5 +295,7 @@ public final class ViolationManager {
         violations.clear();
         lastAlerts.clear();
         lastObservationAlerts.clear();
+        lastKicks.clear();
+        kickCounts.clear();
     }
 }

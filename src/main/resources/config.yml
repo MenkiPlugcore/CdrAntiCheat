@@ -1,5 +1,9 @@
-# CdrAntiCheat v0.3.2
-# Conservative defaults are intentional. Tune after reviewing real server evidence.
+# CdrAntiCheat v0.4.0
+# Config is schema-versioned. Missing keys are synchronized automatically on startup.
+# Existing administrator values are preserved unless they match a known legacy default
+# that must be migrated for the new detection model.
+
+config-version: 4
 
 alerts:
   # always: send in-game staff alerts even when Discord delivery succeeds
@@ -8,9 +12,7 @@ alerts:
   in-game-mode: fallback
   log-to-file: true
   cooldown-ms: 1000
-  # WATCH is silent by default. Staff/Discord starts receiving alerts at ABNORMAL.
   minimum-observation-status: ABNORMAL
-  # Global per-player observation alert cooldown. Status changes bypass this cooldown.
   observation-cooldown-ms: 5000
 
 integrations:
@@ -21,22 +23,20 @@ integrations:
 
 observation:
   enabled: true
-  # observe: collect evidence, calculate confidence, warn staff, never kick/setback.
-  # enforce: allow configured kick/setback actions after thresholds are crossed.
-  enforcement-mode: observe
+  # observe: collect evidence only.
+  # enforce: allow configured kick/setback actions. There is no automatic ban in v0.4.0.
+  enforcement-mode: enforce
 
-  # Impossible non-finite movement may still be cancelled in observe mode as a protocol/server safety guard.
+  # Impossible non-finite movement may still be cancelled as a protocol/server safety guard.
   safety-cancel-impossible-movement: true
 
   max-score: 100.0
   correlation-window-ms: 15000
   same-check-repeat-window-ms: 2500
-  # Repeated noise from one check contributes less than independent correlated signals.
   same-check-repeat-multiplier: 0.40
   correlation-bonus: 4.0
   default-weight: 8.0
 
-  # Confidence score decays after a quiet period so a normal player can return to NORMAL naturally.
   decay-grace-seconds: 10
   score-decay-per-second: 1.25
   session-timeout-seconds: 60
@@ -47,11 +47,15 @@ observation:
     suspicious: 60.0
     high-risk: 85.0
 
-  # Stronger/impossible signals carry more evidence weight. Combat correlation remains conservative.
   weights:
     bad-movement-a: 18.0
     speed-a: 8.0
+    speed-b: 10.0
     fly-a: 10.0
+    fly-b: 12.0
+    fastbreak-a: 14.0
+    fastbreak-b: 10.0
+    fastplace-a: 10.0
     reach-a: 12.0
     autoclicker-a: 8.0
     timer-a: 12.0
@@ -64,45 +68,38 @@ observation:
 
 evidence:
   enabled: true
-  # A quiet gap creates a new evidence session, separating unrelated gameplay periods.
   session-gap-seconds: 45
-  # RAM history is bounded. Total session counters are preserved even when old detail rows are trimmed.
   max-sessions-per-player: 5
   max-records-per-session: 40
-  # Runtime history is available to staff commands for recently tracked/offline players.
   runtime-retention-minutes: 120
   entries-per-page: 5
-  # Every accepted flag, including silent WATCH evidence, can be appended to a persistent daily log.
   log-to-file: true
   log-directory: evidence
 
 compatibility:
   floodgate-detection: true
-  bedrock-threshold-multiplier: 1.75
-  # Packet cadence and combat rotation from Geyser/Floodgate are not identical to native Java.
-  # Timing/correlation-sensitive checks stay skipped until Bedrock baselines are calibrated.
-  bedrock-skip-checks:
-    - reach-a
-    - autoclicker-a
-    - timer-a
-    - packet-rate-a
-    - aim-a
-    - multitarget-a
-    - attack-timing-a
-    - killaura-a
+
+  # Java and Bedrock use the same VL and enforcement thresholds.
+  # Only transport normalization differs for known Geyser/Floodgate rotation artifacts.
+  equal-enforcement: true
+
+  # Legacy fallback settings. They are ignored while equal-enforcement is true.
+  bedrock-threshold-multiplier: 1.0
+  bedrock-skip-checks: []
 
 violations:
   decay-per-second: 0.20
   decay-grace-seconds: 8
   offline-retention-seconds: 900
 
+movement-engine:
+  # Grace after server-applied knockback/velocity so legal movement does not contaminate checks.
+  velocity-grace-ms: 1500
+
 packet-engine:
-  # Grace after server teleports/setbacks so timing windows do not inherit stale packets.
   teleport-grace-ms: 1500
 
   timer:
-    # Vanilla movement cadence is approximately 20 packets/sec.
-    # The default is intentionally loose and requires sustained evidence.
     window-ms: 3000
     max-movement-pps: 22.75
     required-buffer: 6
@@ -114,13 +111,11 @@ packet-engine:
     required-buffer: 2
 
   packet-rate:
-    # Disabled check by default. Telemetry is still collected for /cdrac packet.
     max-inbound-pps: 250.0
     required-buffer: 4
     sample-interval-ms: 1000
 
 combat-engine:
-  # Correlation checks are primarily tuned for Java PvP. Keep this true during initial production calibration.
   players-only: true
   max-packet-age-ms: 220
   velocity-grace-ms: 150
@@ -129,20 +124,17 @@ combat-engine:
   max-jitter-ms: 120
 
   aim:
-    # Requires repeated large rotation snaps landing extremely close to target center.
     min-snap-degrees: 42.0
     max-error-degrees: 0.20
     max-attack-interval-ms: 250
     required-buffer: 4
 
   multitarget:
-    # Packet history window is 250 ms. Three targets plus rapid switching is required.
     min-distinct-targets: 3
     max-switch-interval-ms: 110
     required-buffer: 2
 
   attack-timing:
-    # Extremely low variance across a long sample is suspicious of automated timing.
     min-samples: 14
     min-mean-ms: 35.0
     max-mean-ms: 130.0
@@ -150,7 +142,6 @@ combat-engine:
     required-buffer: 3
 
   killaura:
-    # KillAura is a correlation score. No single weak signal should trigger it alone.
     required-score: 4
     required-buffer: 3
     max-switch-interval-ms: 90
@@ -164,21 +155,69 @@ checks:
     alert-vl: 1.0
     kick-vl: 3.0
 
+  # Ground horizontal movement.
   speed-a:
     enabled: true
-    max-horizontal-per-tick: 0.78
-    required-buffer: 3
+    max-horizontal-per-tick: 0.46
+    required-buffer: 4
     alert-vl: 2.0
-    kick-vl: 12.0
+    kick-vl: 8.0
 
+  # Air horizontal movement after all legal velocity/flight exemptions.
+  speed-b:
+    enabled: true
+    max-horizontal-per-tick: 0.62
+    required-buffer: 5
+    alert-vl: 2.0
+    kick-vl: 9.0
+
+  # Sustained hover.
   fly-a:
     enabled: true
-    max-air-events: 26
-    required-hover-buffer: 6
-    hover-vertical-absolute-max: 0.025
-    setback-vl: 5.0
+    max-air-events: 20
+    required-hover-buffer: 5
+    hover-vertical-absolute-max: 0.030
+    setback-vl: 4.0
     alert-vl: 2.0
-    kick-vl: 12.0
+    kick-vl: 7.0
+
+  # Sustained upward movement after a normal jump should already be descending.
+  fly-b:
+    enabled: true
+    minimum-air-events: 8
+    minimum-upward-delta: 0.060
+    maximum-upward-delta: 0.750
+    required-buffer: 4
+    setback-vl: 4.0
+    alert-vl: 2.0
+    kick-vl: 7.0
+
+  # Start-dig -> successful-break timing on sufficiently hard blocks.
+  fastbreak-a:
+    enabled: true
+    minimum-hardness: 1.0
+    minimum-break-ms: 110
+    required-buffer: 2
+    efficiency-exempt-level: 4
+    alert-vl: 2.0
+    kick-vl: 5.0
+
+  # Repeated successful breaks at an impossible cadence.
+  fastbreak-b:
+    enabled: true
+    minimum-hardness: 0.5
+    minimum-interval-ms: 45
+    required-buffer: 4
+    alert-vl: 2.0
+    kick-vl: 7.0
+
+  # Repeated successful block placements faster than a conservative human/client cadence.
+  fastplace-a:
+    enabled: true
+    minimum-interval-ms: 40
+    required-buffer: 5
+    alert-vl: 2.0
+    kick-vl: 8.0
 
   reach-a:
     enabled: true
@@ -199,19 +238,16 @@ checks:
     alert-vl: 2.0
     kick-vl: 10.0
 
-  # Packet-level timing check. Skipped for Floodgate by default.
   timer-a:
     enabled: true
     alert-vl: 2.0
     kick-vl: 12.0
 
-  # Rejects impossible/non-finite movement rotation state at packet level.
   bad-packets-a:
     enabled: true
     alert-vl: 1.0
     kick-vl: 4.0
 
-  # General inbound flood telemetry/check. Keep disabled until server baseline is known.
   packet-rate-a:
     enabled: false
     alert-vl: 2.0
@@ -238,7 +274,8 @@ checks:
     kick-vl: -1.0
 
 actions:
-  # This switch is only honored when observation.enforcement-mode is enforce.
   kick:
     enabled: true
-    message: 'Unusual client behavior was detected. Please reconnect without prohibited modifications.'
+    # Repeated offenders may be kicked again after this cooldown. Automatic banning is intentionally absent.
+    cooldown-ms: 5000
+    message: "&cCdrAntiCheat\n&7Unusual client behavior detected.\n&fCheck: &c{check}\n&fEvidence: &e{evidence}\n&fKick count: &e{count}\n&7If you believe this is an error, contact server staff."
